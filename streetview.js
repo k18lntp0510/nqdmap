@@ -70,7 +70,8 @@
     ];
   }
 
-  let showPinsOnMap = true;
+  let showPinsOnMap = false;
+  let adminStreetTabActive = false;
   let activeNodeId = null;
   let pickNewNodeMode = false;
   let placeArrowMode = false;
@@ -120,7 +121,9 @@
     const nodes = ensureNodesInitialized();
     const isAdmin = st.adminRole === 'FA';
 
-    if (!showPinsOnMap && !isAdmin) return;
+    // Mặc định KHÔNG đè bất kỳ chấm tròn Street View nào lên Map Gốc;
+    // Chỉ hiện chấm vị trí khi Admin đang mở đúng tab 🌐 Street hoặc người dùng chủ động bật
+    if (!showPinsOnMap && !(isAdmin && adminStreetTabActive)) return;
 
     nodes.forEach(node => {
       const hasImg = !!(node.img && node.img.trim() !== '');
@@ -504,6 +507,49 @@
     document.getElementById('adm-sv-name').value = node.name || '';
     document.getElementById('adm-sv-floor').value = node.floor || 'TRET';
     document.getElementById('adm-sv-img-path').value = node.img && node.img.startsWith('data:') ? '[Ảnh test cục bộ]' : (node.img || '');
+
+    // Render danh sách mũi tên của điểm đang chọn để đổi tên / icon tùy ý trực tiếp
+    const arrowsBox = document.getElementById('adm-sv-arrows-list');
+    if (arrowsBox) {
+      arrowsBox.innerHTML = '';
+      const arrs = node.arrows || [];
+      if (arrs.length === 0) {
+        arrowsBox.innerHTML = '<div class="text-[11px] text-slate-500 italic px-1">Chưa có mũi tên nào ở điểm này.</div>';
+      } else {
+        arrs.forEach(ar => {
+          const row = document.createElement('div');
+          row.className = 'flex items-center gap-1 bg-slate-950 p-1.5 rounded-lg border border-slate-800';
+          row.innerHTML = `
+            <select class="ar-icon-sel bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-xs text-white">
+              <option value="⬆️" ${ar.icon === '⬆️' ? 'selected' : ''}>⬆️</option>
+              <option value="⬅️" ${ar.icon === '⬅️' ? 'selected' : ''}>⬅️</option>
+              <option value="➡️" ${ar.icon === '➡️' ? 'selected' : ''}>➡️</option>
+              <option value="↩️" ${ar.icon === '↩️' ? 'selected' : ''}>↩️</option>
+              <option value="🪜" ${ar.icon === '🪜' ? 'selected' : ''}>🪜</option>
+            </select>
+            <input type="text" value="${(ar.label || '').replace(/"/g, '&quot;')}" placeholder="Tên hiển thị trên mũi tên..." class="ar-label-in flex-1 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-xs text-white" />
+            <button class="ar-del-btn px-1.5 text-rose-400 hover:text-rose-300 text-xs font-bold">✖</button>
+          `;
+          row.querySelector('.ar-icon-sel').addEventListener('change', (e) => {
+            ar.icon = e.target.value;
+            getMap().saveStorage();
+            renderViewerArrows(node);
+          });
+          row.querySelector('.ar-label-in').addEventListener('input', (e) => {
+            ar.label = e.target.value;
+            getMap().saveStorage();
+            renderViewerArrows(node);
+          });
+          row.querySelector('.ar-del-btn').addEventListener('click', () => {
+            node.arrows = node.arrows.filter(x => x.id !== ar.id);
+            getMap().saveStorage();
+            renderViewerArrows(node);
+            refreshAdminStreetViewTab();
+          });
+          arrowsBox.appendChild(row);
+        });
+      }
+    }
   }
 
   // 8. KHỞI TẠO TOÀN BỘ SỰ KIỆN CHO MODULE STREETVIEW.JS
@@ -568,7 +614,15 @@
       node.name = e.target.value;
       getMap().saveStorage();
       renderMapPins();
-      refreshAdminStreetViewTab();
+      const titleEl = document.getElementById('sv-viewer-title');
+      if (titleEl && activeNodeId === node.id) titleEl.textContent = node.name;
+      // Cập nhật dòng chữ trong danh sách mà không làm mất focus ô đang gõ
+      const listBtns = document.querySelectorAll('#adm-sv-nodes-list button');
+      const idx = ensureNodesInitialized().findIndex(n => n.id === node.id);
+      if (idx >= 0 && listBtns[idx]) {
+        const sp = listBtns[idx].querySelector('span');
+        if (sp) sp.textContent = `${node.img ? '📷' : '○'} ${node.name}`;
+      }
     });
 
     document.getElementById('adm-sv-floor')?.addEventListener('change', (e) => {
@@ -693,11 +747,25 @@
     renderMapPins();
   }
 
+  function setAdminTabActive(isActive) {
+    adminStreetTabActive = !!isActive;
+    if (!isActive) {
+      pickNewNodeMode = false;
+      const pickBtn = document.getElementById('btn-adm-sv-pick-map');
+      if (pickBtn) {
+        pickBtn.className = 'flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold';
+        pickBtn.textContent = '＋ Chấm điểm trên Map';
+      }
+    }
+    renderMapPins();
+  }
+
   window.NQDStreetView = {
     openViewer,
     closeViewer,
     renderMapPins,
     refreshAdminStreetViewTab,
+    setAdminTabActive,
     init: initStreetView
   };
 })(window);

@@ -84,6 +84,7 @@
 
     @keyframes nqdDashFlow { to { stroke-dashoffset: -44; } }
     .route-line-casing { fill: none; stroke: #0f172a; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; opacity: 0.88; }
+    .route-line-leg1 { fill: none; stroke: #0ea5e9; stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 8; animation: nqdDashFlow 0.85s linear infinite; }
     .route-line-main { fill: none; stroke: #ef4444; stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 8; animation: nqdDashFlow 0.85s linear infinite; }
     .fixed-event-line-casing { fill: none; stroke: #ffffff; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; }
     .fixed-event-line-main { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 10 6; animation: nqdDashFlow 1.3s linear infinite; }
@@ -183,6 +184,7 @@
           <div id="route-banner-endpoints" class="text-xs sm:text-sm font-bold truncate"></div>
           <div id="route-banner-sub" class="text-[11px] text-sky-300 truncate"></div>
         </div>
+        <div id="route-leg-controls" class="flex items-center gap-1.5 shrink-0"></div>
         <button id="btn-clear-active-route" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0">✖ Tắt chỉ đường</button>
       </div>
       <div id="map-world" class="absolute top-0 left-0 origin-top-left" style="width: 1850px; height: 1700px;">
@@ -247,17 +249,17 @@
           <text x="486" y="733" text-anchor="middle" font-size="12" font-weight="bold">Trệt</text>
 
           <rect x="1202" y="780" width="188" height="26" fill="#f5d061" />
-          <text x="1233" y="797" text-anchor="middle" font-size="12" font-weight="bold">Lầu 2</text>
-          <text x="1295" y="797" text-anchor="middle" font-size="12" font-weight="bold">Lầu 1</text>
-          <text x="1358" y="797" text-anchor="middle" font-size="12" font-weight="bold">Trệt</text>
+          <text x="1234" y="797" text-anchor="middle" font-size="12" font-weight="bold">Trệt</text>
+          <text x="1297" y="797" text-anchor="middle" font-size="12" font-weight="bold">Lầu 1</text>
+          <text x="1359" y="797" text-anchor="middle" font-size="12" font-weight="bold">Lầu 2</text>
         </svg>
 
         <!-- LỚP 2: CÁC KHỐI PHÒNG HỌC, KHU VỰC, TRỤC BẤT BIẾN & 14 Ô CÂY XANH -->
         <div id="rooms-layer" class="absolute inset-0 z-20"></div>
 
         <!-- LỚP 3 (TOP LAYER): KHUNG CHỜ CHO MODULE ROUTING.JS -->
-        <svg id="wayfinding-svg" class="absolute inset-0 w-full h-full pointer-events-none z-30" viewBox="0 0 1850 1700"></svg>
-        <div id="wayfinding-badges-layer" class="absolute inset-0 pointer-events-none z-35"></div>
+        <svg id="wayfinding-svg" class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 45;" viewBox="0 0 1850 1700"></svg>
+        <div id="wayfinding-badges-layer" class="absolute inset-0 pointer-events-none" style="z-index: 60;"></div>
         <div id="streetview-pins-layer" class="absolute inset-0 pointer-events-none z-35"></div>
       </div>
 
@@ -323,10 +325,12 @@
               <span>Grid 10px</span>
             </label>
             <button id="btn-toggle-drag-mode" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold">✋ Kéo thả</button>
+            <button id="btn-admin-undo" disabled class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs font-bold cursor-not-allowed" title="Hoàn tác (Ctrl+Z)">↩️ Hoàn tác</button>
           </div>
           <div class="flex items-center gap-1.5">
             <button id="btn-adm-add-booth" class="flex-1 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">＋ Gian hàng / Khu vực</button>
             <button id="btn-adm-add-tree" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">🌳 Cây xanh</button>
+            <button id="btn-adm-add-step" class="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">🪜 Bậc thang</button>
             <button id="btn-adm-delete-room" class="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">🗑️</button>
           </div>
         </div>
@@ -680,6 +684,10 @@
           <button id="btn-adm-sv-open-editor" class="w-full py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold shadow">
             🎯 Mở Ảnh & Chấm Mũi Tên Thủ Công
           </button>
+          <div class="pt-2 border-t border-slate-800 space-y-1.5">
+            <span class="block text-[11px] font-bold text-fuchsia-300">✏️ Đổi Tên Các Mũi Tên Của Điểm Này</span>
+            <div id="adm-sv-arrows-list" class="space-y-1 max-h-32 overflow-y-auto"></div>
+          </div>
         </div>
       </div>
 
@@ -932,7 +940,7 @@
 (function (window) {
   'use strict';
 
-  const STORAGE_KEY = 'NQD_MAP_DATA_V2';
+  const STORAGE_KEY = 'NQD_MAP_DATA_V8';
 
   const DEFAULT_EVENT_TAGS = [
     { id: 'tag_letan', icon: '🛎️', label: 'Điểm liên hệ Lễ tân' },
@@ -992,136 +1000,136 @@
         desc: 'Cột cờ trung tâm sân trường THPT Chuyên Nguyễn Quang Diêu (Khóa cứng tuyệt đối).'
       },
       {
-        id: 'thu_vien', name: 'Thư Viện', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 330, y: 1226, w: 188, h: 114, color: '#f8dc52', textColor: '#0f172a',
-        fontSize: 18, angle: 0, shape: 'octagon',
+        id: 'thu_vien', name: 'Thư Viện', floor: 'LAU1', category: 'HANHCHINH',
+        x: 330, y: 1306, w: 188, h: 100, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 18, angle: 0, shape: 'rect',
         tags: ['tag_checkin'],
         tooltipEmoji: '📚', tooltipText: 'Thư viện nhà trường (Kiến trúc mái tròn/bát giác trên vệ tinh)', tooltipBg: '#fef9c3',
         desc: 'Thư viện trường THPT Chuyên Nguyễn Quang Diêu với khối kiến trúc mái tròn/bát giác đặc trưng ở góc Tây-Nam.'
       },
       {
-        id: 'sanh_thu_vien', name: 'Sảnh Thư Viện', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 330, y: 1340, w: 188, h: 66, color: '#f5b553', textColor: '#0f172a',
+        id: 'sanh_thu_vien', name: 'Sảnh Thư Viện', floor: 'TRET', category: 'HANHCHINH',
+        x: 330, y: 1226, w: 188, h: 80, color: '#f5b553', textColor: '#0f172a',
         fontSize: 16, angle: 0, shape: 'rect',
         tags: [],
         tooltipEmoji: '🏛️', tooltipText: 'Sảnh đón Thư viện', tooltipBg: '#ffedd5',
         desc: 'Khu vực sảnh chính phía trước Thư viện.'
       },
       {
-        id: 'phong_truyen_thong', name: 'Phòng Truyền Thống', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 518, y: 1282, w: 115, h: 62, color: '#f5b553', textColor: '#0f172a',
+        id: 'phong_truyen_thong', name: 'Phòng Truyền Thống', floor: 'LAU1', category: 'HANHCHINH',
+        x: 518, y: 1344, w: 115, h: 62, color: '#f5b553', textColor: '#0f172a',
         fontSize: 12, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🏅', tooltipText: 'Phòng Truyền Thống nhà trường', tooltipBg: '#ffedd5',
         desc: 'Nơi lưu giữ bảng vàng thành tích và lịch sử trường THPT Chuyên Nguyễn Quang Diêu.'
       },
       {
-        id: 'cong_doan', name: 'Công đoàn', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 633, y: 1282, w: 75, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        id: 'cong_doan', name: 'Công đoàn', floor: 'LAU1', category: 'HANHCHINH',
+        x: 633, y: 1344, w: 75, h: 62, color: '#f8dc52', textColor: '#0f172a',
         fontSize: 12, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🤝', tooltipText: 'Văn phòng Công đoàn', tooltipBg: '#fef9c3',
         desc: 'Phòng Công đoàn cơ sở nhà trường.'
       },
       {
-        id: 'khoang_dem_hc', name: 'Sảnh Nội Bộ', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 708, y: 1282, w: 50, h: 62, color: '#f5b553', textColor: '#0f172a',
+        id: 'khoang_dem_hc', name: 'Sảnh Nội Bộ', floor: 'LAU1', category: 'HANHCHINH',
+        x: 708, y: 1344, w: 50, h: 62, color: '#f5b553', textColor: '#0f172a',
         fontSize: 10, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🚪', tooltipText: 'Khoang sảnh nội bộ khu Hành chính', tooltipBg: '#ffedd5',
         desc: 'Sảnh đệm kết nối nội bộ khu Hành chính.'
       },
       {
-        id: 'hoi_truong_nho', name: 'Hội trường nhỏ', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 758, y: 1282, w: 204, h: 62, color: '#29b6f6', textColor: '#0f172a',
+        id: 'hoi_truong_nho', name: 'Hội trường nhỏ', floor: 'LAU1', category: 'HANHCHINH',
+        x: 758, y: 1344, w: 204, h: 62, color: '#29b6f6', textColor: '#0f172a',
         fontSize: 15, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🎤', tooltipText: 'Hội trường nhỏ — Hội thảo & Sinh hoạt chuyên đề', tooltipBg: '#e0f2fe',
         desc: 'Hội trường nhỏ phục vụ hội họp, chuyên đề học thuật và gặp gỡ đại biểu.'
       },
       {
-        id: 'phong_hop', name: 'Phòng họp', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 962, y: 1282, w: 120, h: 62, color: '#4dd0e1', textColor: '#0f172a',
+        id: 'phong_hop', name: 'Phòng họp', floor: 'LAU1', category: 'HANHCHINH',
+        x: 962, y: 1344, w: 120, h: 62, color: '#4dd0e1', textColor: '#0f172a',
         fontSize: 14, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '📋', tooltipText: 'Phòng họp Hội đồng Sư phạm', tooltipBg: '#cffafe',
         desc: 'Phòng họp Hội đồng và Ban giám hiệu.'
       },
       {
-        id: 'kho_hc', name: 'Kho', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 1082, y: 1282, w: 76, h: 62, color: '#17b8de', textColor: '#0f172a',
+        id: 'kho_hc', name: 'Kho', floor: 'LAU1', category: 'HANHCHINH',
+        x: 1082, y: 1344, w: 76, h: 62, color: '#17b8de', textColor: '#0f172a',
         fontSize: 14, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '📦', tooltipText: 'Kho thiết bị Hành chính', tooltipBg: '#cffafe',
         desc: 'Kho lưu trữ vật tư, thiết bị hành chính.'
       },
       {
-        id: 'wc_gv2', name: 'WC GV2', floor: 'HANHCHINH', category: 'WC',
-        x: 1158, y: 1282, w: 44, h: 62, color: '#d896ff', textColor: '#0f172a',
+        id: 'wc_gv2', name: 'WC GV2', floor: 'LAU1', category: 'WC',
+        x: 1158, y: 1344, w: 44, h: 62, color: '#d896ff', textColor: '#0f172a',
         fontSize: 11, angle: -90, shape: 'rect', tags: [],
         tooltipEmoji: '🚻', tooltipText: 'WC Giáo viên 2', tooltipBg: '#f3e8ff',
         desc: 'Khu vệ sinh Giáo viên 2.'
       },
       {
-        id: 'phong_giao_vien', name: 'Phòng Giáo viên', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 518, y: 1344, w: 115, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        id: 'phong_giao_vien', name: 'Phòng Giáo viên', floor: 'TRET', category: 'HANHCHINH',
+        x: 518, y: 1282, w: 115, h: 62, color: '#f8dc52', textColor: '#0f172a',
         fontSize: 12, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '👩‍🏫', tooltipText: 'Phòng Giáo viên', tooltipBg: '#fef9c3',
         desc: 'Phòng nghỉ và trao đổi chuyên môn của Giáo viên.'
       },
       {
-        id: 'phong_hieu_pho_1', name: 'Phòng Hiệu phó', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 633, y: 1344, w: 75, h: 62, color: '#f5b553', textColor: '#0f172a',
+        id: 'phong_hieu_pho_1', name: 'Phòng Hiệu phó', floor: 'TRET', category: 'HANHCHINH',
+        x: 633, y: 1282, w: 75, h: 62, color: '#f5b553', textColor: '#0f172a',
         fontSize: 11, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '⭐', tooltipText: 'Phòng Phó Hiệu trưởng 1', tooltipBg: '#ffedd5',
         desc: 'Phòng làm việc của Phó Hiệu trưởng.'
       },
       {
-        id: 'phong_hieu_truong', name: 'Phòng Hiệu trưởng', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 708, y: 1344, w: 50, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        id: 'phong_hieu_truong', name: 'Phòng Hiệu trưởng', floor: 'TRET', category: 'HANHCHINH',
+        x: 708, y: 1282, w: 50, h: 62, color: '#f8dc52', textColor: '#0f172a',
         fontSize: 9, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🌟', tooltipText: 'Phòng Hiệu trưởng', tooltipBg: '#fef9c3',
         desc: 'Phòng làm việc của Hiệu trưởng nhà trường.'
       },
       {
-        id: 'van_phong', name: 'Văn Phòng', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 758, y: 1344, w: 58, h: 62, color: '#f5b553', textColor: '#0f172a',
+        id: 'van_phong', name: 'Văn Phòng', floor: 'TRET', category: 'HANHCHINH',
+        x: 758, y: 1282, w: 58, h: 62, color: '#f5b553', textColor: '#0f172a',
         fontSize: 11, angle: 0, shape: 'rect', tags: ['tag_letan'],
         tooltipEmoji: '🗂️', tooltipText: 'Văn phòng hành chính & Tiếp dân', tooltipBg: '#ffedd5',
         desc: 'Văn phòng hành chính tiếp nhận công văn và hỗ trợ thông tin.'
       },
       {
-        id: 'sanh_thong_bao', name: 'Sảnh thông báo', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 816, y: 1344, w: 88, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        id: 'sanh_thong_bao', name: 'Sảnh thông báo', floor: 'TRET', category: 'HANHCHINH',
+        x: 816, y: 1282, w: 88, h: 62, color: '#f8dc52', textColor: '#0f172a',
         fontSize: 12, angle: 0, shape: 'rect', tags: ['tag_letan'],
         tooltipEmoji: '📢', tooltipText: 'Sảnh thông báo trung tâm (Chính diện Tượng Cụ)', tooltipBg: '#fef9c3',
         desc: 'Sảnh thông báo trung tâm nằm thẳng trục Cổng chính — Tượng Cụ — Cột cờ.'
       },
       {
-        id: 'vp_doan', name: 'VP Đoàn', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 904, y: 1344, w: 58, h: 62, color: '#f5b553', textColor: '#0f172a',
+        id: 'vp_doan', name: 'VP Đoàn', floor: 'TRET', category: 'HANHCHINH',
+        x: 904, y: 1282, w: 58, h: 62, color: '#f5b553', textColor: '#0f172a',
         fontSize: 11, angle: 0, shape: 'rect', tags: ['tag_letan'],
         tooltipEmoji: '🔥', tooltipText: 'Văn phòng Đoàn TNCS Hồ Chí Minh', tooltipBg: '#ffedd5',
         desc: 'Văn phòng Đoàn trường — Thường trực Ban tổ chức các sự kiện học sinh.'
       },
       {
-        id: 'phong_hieu_pho_2', name: 'Phòng Hiệu phó', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 962, y: 1344, w: 60, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        id: 'phong_hieu_pho_2', name: 'Phòng Hiệu phó', floor: 'TRET', category: 'HANHCHINH',
+        x: 962, y: 1282, w: 60, h: 62, color: '#f8dc52', textColor: '#0f172a',
         fontSize: 10, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '⭐', tooltipText: 'Phòng Phó Hiệu trưởng 2', tooltipBg: '#fef9c3',
         desc: 'Phòng làm việc của Phó Hiệu trưởng.'
       },
       {
-        id: 'phong_hoc_vu', name: 'Phòng Học Vụ', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 1022, y: 1344, w: 60, h: 62, color: '#f5b553', textColor: '#0f172a',
+        id: 'phong_hoc_vu', name: 'Phòng Học Vụ', floor: 'TRET', category: 'HANHCHINH',
+        x: 1022, y: 1282, w: 60, h: 62, color: '#f5b553', textColor: '#0f172a',
         fontSize: 10, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '📑', tooltipText: 'Phòng Học Vụ & Đào tạo', tooltipBg: '#ffedd5',
         desc: 'Phòng quản lý hồ sơ học tập và giáo vụ.'
       },
       {
-        id: 'phong_ky_thuat', name: 'Phòng kỹ thuật', floor: 'HANHCHINH', category: 'HANHCHINH',
-        x: 1082, y: 1344, w: 76, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        id: 'phong_ky_thuat', name: 'Phòng kỹ thuật', floor: 'TRET', category: 'HANHCHINH',
+        x: 1082, y: 1282, w: 76, h: 62, color: '#f8dc52', textColor: '#0f172a',
         fontSize: 10, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '⚡', tooltipText: 'Phòng Kỹ thuật & Âm thanh ánh sáng', tooltipBg: '#fef9c3',
         desc: 'Phòng kỹ thuật điện, mạng và điều khiển hệ thống âm thanh.'
       },
       {
-        id: 'wc_gv1', name: 'WC GV1', floor: 'HANHCHINH', category: 'WC',
-        x: 1158, y: 1344, w: 44, h: 62, color: '#8c52ff', textColor: '#ffffff',
+        id: 'wc_gv1', name: 'WC GV1', floor: 'TRET', category: 'WC',
+        x: 1158, y: 1282, w: 44, h: 62, color: '#8c52ff', textColor: '#ffffff',
         fontSize: 11, angle: -90, shape: 'rect', tags: [],
         tooltipEmoji: '🚻', tooltipText: 'WC Giáo viên 1', tooltipBg: '#f3e8ff',
         desc: 'Khu vệ sinh Giáo viên 1.'
@@ -1147,22 +1155,22 @@
 
       { id: 'stair_west', name: 'Cầu thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 330, y: 1182, w: 188, h: 44, color: '#38b6ff', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Dãy Học Trái (Trệt ↔ Lầu 1 ↔ Lầu 2)', tooltipBg: '#e0f2fe', desc: 'Cầu thang kết nối 3 tầng của Dãy Học Trái.' },
 
-      { id: 'ptn_hoa', name: 'PTN Hoá học', floor: 'LAU2', category: 'PHONGTN', x: 1202, y: 806, w: 62, h: 144, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🧪', tooltipText: 'Phòng Thí nghiệm Hoá học (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Hoá học.' },
-      { id: 'ptn_sinh', name: 'PTN Sinh học', floor: 'LAU2', category: 'PHONGTN', x: 1202, y: 950, w: 62, h: 144, color: '#4dd0e1', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🧬', tooltipText: 'Phòng Thí nghiệm Sinh học (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Sinh học.' },
-      { id: 'ptn_ly', name: 'PTN Vật lý', floor: 'LAU2', category: 'PHONGTN', x: 1202, y: 1094, w: 62, h: 144, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🔭', tooltipText: 'Phòng Thí nghiệm Vật lý (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Vật lý.' },
+      { id: 'ptn_hoa', name: 'PTN Hoá học', floor: 'LAU2', category: 'PHONGTN', x: 1328, y: 806, w: 62, h: 144, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🧪', tooltipText: 'Phòng Thí nghiệm Hoá học (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Hoá học.' },
+      { id: 'ptn_sinh', name: 'PTN Sinh học', floor: 'LAU2', category: 'PHONGTN', x: 1328, y: 950, w: 62, h: 144, color: '#4dd0e1', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🧬', tooltipText: 'Phòng Thí nghiệm Sinh học (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Sinh học.' },
+      { id: 'ptn_ly', name: 'PTN Vật lý', floor: 'LAU2', category: 'PHONGTN', x: 1328, y: 1094, w: 62, h: 144, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🔭', tooltipText: 'Phòng Thí nghiệm Vật lý (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Vật lý.' },
 
-      { id: 'pbm_l1_1', name: 'Phòng BM', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 806, w: 62, h: 72, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📘', tooltipText: 'Phòng Bộ Môn 1 (Lầu 1)', tooltipBg: '#fef9c3', desc: 'Phòng sinh hoạt chuyên môn các tổ bộ môn.' },
-      { id: 'pbm_l1_2', name: 'Phòng BM', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 878, w: 62, h: 72, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📙', tooltipText: 'Phòng Bộ Môn 2 (Lầu 1)', tooltipBg: '#ffedd5', desc: 'Phòng sinh hoạt chuyên môn các tổ bộ môn.' },
-      { id: 'phong_steam', name: 'Phòng STEAM', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 950, w: 62, h: 92, color: '#f8dc52', textColor: '#0f172a', fontSize: 12, angle: 90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '🤖', tooltipText: 'Phòng STEAM & Nghiên cứu KHKT', tooltipBg: '#fef9c3', desc: 'Phòng thực hành STEAM, chế tạo Robot và nghiên cứu Khoa học Kỹ thuật.' },
-      { id: 'kho_clb', name: 'Kho CLB', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 1042, w: 62, h: 52, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📦', tooltipText: 'Kho CLB học sinh', tooltipBg: '#ffedd5', desc: 'Kho lưu trữ vật dụng và đạo cụ của các CLB.' },
-      { id: 'phong_cong_nghe', name: 'Phòng Công Nghệ', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 1094, w: 62, h: 92, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '⚙️', tooltipText: 'Phòng thực hành Công Nghệ', tooltipBg: '#fef9c3', desc: 'Phòng học và thực hành môn Công nghệ.' },
-      { id: 'phong_khach', name: 'Phòng Khách', floor: 'LAU1', category: 'HANHCHINH', x: 1264, y: 1186, w: 62, h: 52, color: '#f5b553', textColor: '#0f172a', fontSize: 10, angle: 0, shape: 'rect', tags: ['tag_letan'], tooltipEmoji: '🍵', tooltipText: 'Phòng đón khách', tooltipBg: '#ffedd5', desc: 'Phòng tiếp đón khách mời và đoàn công tác.' },
+      { id: 'pbm_l1_1', name: 'Phòng BM', floor: 'LAU1', category: 'PHONGTN', x: 1266, y: 806, w: 62, h: 72, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📘', tooltipText: 'Phòng Bộ Môn 1 (Lầu 1)', tooltipBg: '#fef9c3', desc: 'Phòng sinh hoạt chuyên môn các tổ bộ môn.' },
+      { id: 'pbm_l1_2', name: 'Phòng BM', floor: 'LAU1', category: 'PHONGTN', x: 1266, y: 878, w: 62, h: 72, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📙', tooltipText: 'Phòng Bộ Môn 2 (Lầu 1)', tooltipBg: '#ffedd5', desc: 'Phòng sinh hoạt chuyên môn các tổ bộ môn.' },
+      { id: 'phong_steam', name: 'Phòng STEAM', floor: 'LAU1', category: 'PHONGTN', x: 1266, y: 950, w: 62, h: 92, color: '#f8dc52', textColor: '#0f172a', fontSize: 12, angle: 90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '🤖', tooltipText: 'Phòng STEAM & Nghiên cứu KHKT', tooltipBg: '#fef9c3', desc: 'Phòng thực hành STEAM, chế tạo Robot và nghiên cứu Khoa học Kỹ thuật.' },
+      { id: 'kho_clb', name: 'Kho CLB', floor: 'LAU1', category: 'PHONGTN', x: 1266, y: 1042, w: 62, h: 52, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📦', tooltipText: 'Kho CLB học sinh', tooltipBg: '#ffedd5', desc: 'Kho lưu trữ vật dụng và đạo cụ của các CLB.' },
+      { id: 'phong_cong_nghe', name: 'Phòng Công Nghệ', floor: 'LAU1', category: 'PHONGTN', x: 1266, y: 1094, w: 62, h: 92, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '⚙️', tooltipText: 'Phòng thực hành Công Nghệ', tooltipBg: '#fef9c3', desc: 'Phòng học và thực hành môn Công nghệ.' },
+      { id: 'phong_khach', name: 'Phòng Khách', floor: 'LAU1', category: 'HANHCHINH', x: 1266, y: 1186, w: 62, h: 52, color: '#f5b553', textColor: '#0f172a', fontSize: 10, angle: 0, shape: 'rect', tags: ['tag_letan'], tooltipEmoji: '🍵', tooltipText: 'Phòng đón khách', tooltipBg: '#ffedd5', desc: 'Phòng tiếp đón khách mời và đoàn công tác.' },
 
-      { id: 'phong_may_1', name: 'Phòng máy 1', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 806, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 1 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 1.' },
-      { id: 'phong_may_2', name: 'Phòng máy 2', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 902, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 2 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 2.' },
-      { id: 'phong_may_3', name: 'Phòng máy 3', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 998, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 3 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 3.' },
-      { id: 'pbm_tret_1', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 1094, w: 64, h: 72, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📘', tooltipText: 'Phòng Bộ Môn (Trệt 1)', tooltipBg: '#fef9c3', desc: 'Phòng bộ môn tầng trệt.' },
-      { id: 'pbm_tret_2', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 1166, w: 64, h: 72, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📙', tooltipText: 'Phòng Bộ Môn (Trệt 2)', tooltipBg: '#ffedd5', desc: 'Phòng bộ môn tầng trệt.' },
+      { id: 'phong_may_1', name: 'Phòng máy 1', floor: 'TRET', category: 'PHONGTN', x: 1202, y: 806, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 1 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 1.' },
+      { id: 'phong_may_2', name: 'Phòng máy 2', floor: 'TRET', category: 'PHONGTN', x: 1202, y: 902, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 2 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 2.' },
+      { id: 'phong_may_3', name: 'Phòng máy 3', floor: 'TRET', category: 'PHONGTN', x: 1202, y: 998, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 3 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 3.' },
+      { id: 'pbm_tret_1', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 1202, y: 1094, w: 64, h: 72, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📘', tooltipText: 'Phòng Bộ Môn (Trệt 1)', tooltipBg: '#fef9c3', desc: 'Phòng bộ môn tầng trệt.' },
+      { id: 'pbm_tret_2', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 1202, y: 1166, w: 64, h: 72, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📙', tooltipText: 'Phòng Bộ Môn (Trệt 2)', tooltipBg: '#ffedd5', desc: 'Phòng bộ môn tầng trệt.' },
 
       { id: 'stair_east', name: 'Cầu thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 1202, y: 1238, w: 188, h: 44, color: '#38b6ff', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Dãy Thực Hành Phải', tooltipBg: '#e0f2fe', desc: 'Cầu thang kết nối 3 tầng Dãy Thực Hành & Bộ Môn.' },
 
@@ -1278,7 +1286,7 @@
         ]
       },
       {
-        id: 'nha_xe_gv', name: 'Nhà xe giáo viên', floor: 'HANHCHINH', category: 'NGOAIVI',
+        id: 'nha_xe_gv', name: 'Nhà xe giáo viên', floor: 'TRET', category: 'NGOAIVI',
         x: 1320, y: 1475, w: 235, h: 68, color: '#29a9f8', textColor: '#0f172a',
         fontSize: 16, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🛵', tooltipText: 'Nhà xe Giáo viên & Khách', tooltipBg: '#e0f2fe',
@@ -1364,7 +1372,7 @@
       },
       {
         id: 'tree_west_avenue', name: '🌲 Hàng cây Đường Nội Bộ Tây', floor: 'TRET', category: 'NGOAIVI', isTree: true,
-        x: 245, y: 520, w: 56, h: 480, color: '#bbf7d0', textColor: '#14532d',
+        x: 260, y: 520, w: 46, h: 480, color: '#bbf7d0', textColor: '#14532d',
         fontSize: 12, angle: -90, shape: 'rect', tags: [],
         tooltipEmoji: '🌲', tooltipText: 'Hàng cây xanh ngăn giữa Nhà xe học sinh và Dãy Học Trái', tooltipBg: '#dcfce7',
         desc: 'Dải cây xanh chạy dọc trục đường nội bộ phía Tây trường.'
@@ -1382,7 +1390,20 @@
         fontSize: 12, angle: 0, shape: 'rect', tags: [],
         tooltipEmoji: '🌳', tooltipText: 'Cụm cây xanh phía Nam Hội trường lớn', tooltipBg: '#dcfce7',
         desc: 'Thảm cây xanh trước sảnh Hội trường lớn.'
-      }
+      },
+
+      // ==================== I.2H HỆ THỐNG BẬC THANG (LỐI LÊN XUỐNG HÀNH LANG — CHỐNG NHẢY LAN CAN) ====================
+      { id: 'step_sanh_tb', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 842, y: 1406, w: 36, h: 14, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Sảnh thông báo (Xuống Tượng Cụ / Cổng chính)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang lên xuống hành lang Khu Hành chính.' },
+      { id: 'step_sanh_tv_ngoai', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 406, y: 1406, w: 36, h: 14, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Thư viện (Ra Nhà xe học sinh)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang xuống đường nội bộ phía Tây.' },
+      { id: 'step_san_trai_nam', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 560, y: 1196, w: 14, h: 32, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Góc Tây-Nam (Xuống Sân trường)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Hành lang Tây xuống Sân trường.' },
+      { id: 'step_sanh_av_san', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 560, y: 946, w: 14, h: 32, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Sảnh AV (Xuống Sân trường)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Sảnh AV xuống Sân trường.' },
+      { id: 'step_sanh_cc_trai', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 730, y: 720, w: 32, h: 14, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Sảnh Chào Cờ (Trái)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang xuống sân Cột cờ.' },
+      { id: 'step_loi_can_tin', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 1202, y: 734, w: 16, h: 32, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Lối xuống Căn tin & Hội trường lớn', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Hành lang Đông ra Căn tin và Hội trường lớn.' },
+      { id: 'step_san_phai_nam', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 1146, y: 1200, w: 14, h: 32, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Góc Đông-Nam (Xuống Sân trường)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Hành lang Đông xuống Sân trường.' },
+      { id: 'step_nam_htl', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 1202, y: 1286, w: 32, h: 14, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Cầu thang Phải (Ra Hội trường lớn / Nhà xe GV)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Cầu thang Phải ra khu ngoại vi Đông-Nam.' },
+      { id: 'step_bac_vuon_rau', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 802, y: 410, w: 14, h: 32, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Hành lang Bắc (Ra Vườn rau & Sân bóng)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Hành lang Bắc ra Vườn rau hữu cơ.' },
+      { id: 'step_bac_ntd', name: 'Bậc thang', floor: 'TRET', category: 'NGOAIVI', isStep: true, x: 1202, y: 372, w: 16, h: 32, color: '#fbbf24', textColor: '#0f172a', fontSize: 8, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Bậc thang Khu Bắc (Ra Nhà thi đấu)', tooltipBg: '#fef3c7', desc: 'Lối bậc thang từ Hành lang Đông ra Nhà thi đấu.' }
+
     ];
   }
 
@@ -1505,7 +1526,7 @@
         clipPath: 'polygon(' + pts.map(p => `${p.x}% ${p.y}%`).join(', ') + ')'
       };
     }
-    return { borderRadius: '5px', clipPath: 'none' };
+    return { borderRadius: '0px', clipPath: 'none' };
   }
 
   function isRoomMatchingFilters(room) {
@@ -1517,7 +1538,11 @@
       if (!inName && !inDesc) return false;
     }
     if (MapState.activeFloor !== 'ALL') {
-      if (room.floor !== 'ALL' && room.floor !== MapState.activeFloor) return false;
+      if (MapState.activeFloor === 'HANHCHINH') {
+        if (room.category !== 'HANHCHINH' && room.id !== 'wc_gv1' && room.id !== 'wc_gv2') return false;
+      } else if (room.floor !== 'ALL' && room.floor !== MapState.activeFloor) {
+        return false;
+      }
     }
     if (MapState.activeCategory !== 'ALL') {
       if (room.category !== MapState.activeCategory) return false;
@@ -1676,7 +1701,7 @@
       let cls = 'room-block absolute flex items-center justify-center cursor-pointer transition-all duration-150 overflow-hidden ';
       cls += room.isTree
         ? 'border-2 border-dashed border-emerald-700/45 shadow-inner '
-        : 'border border-slate-900/25 shadow-sm ';
+        : 'border border-slate-900/30 ';
 
       if (!matched && !isLit) cls += 'room-dimmed ';
       if (isLit) cls += 'room-route-lit ';
@@ -1684,7 +1709,13 @@
       if (isMulti && MapState.multiSelectedIds.length > 1) cls += 'room-multi-selected ';
       el.className = cls;
 
-      if (room.id === 'cot_co') {
+      if (room.isStep) {
+        el.style.backgroundImage = 'repeating-linear-gradient(90deg, rgba(15,23,42,0.22) 0px, rgba(15,23,42,0.22) 2px, transparent 2px, transparent 5px)';
+        el.style.border = '1.5px solid #92400e';
+        el.style.zIndex = '26';
+        el.title = room.tooltipText || 'Bậc thang lên xuống hành lang';
+        el.innerHTML = `<span class="text-[8px] font-extrabold text-amber-950 leading-none pointer-events-none">≡</span>`;
+      } else if (room.id === 'cot_co') {
         el.innerHTML = `
           <div class="flex flex-col items-center justify-center w-full h-full pointer-events-none">
             <span class="flag-wave text-xl leading-none">🇻🇳</span>

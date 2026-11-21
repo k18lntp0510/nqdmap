@@ -68,6 +68,51 @@
     getMap().saveStorage();
   }
 
+  
+  const undoStack = [];
+  const MAX_UNDO = 30;
+
+  function pushUndoSnapshot() {
+    const sheet = getMap().getActiveSheet();
+    if (!sheet) return;
+    undoStack.push({
+      sheetId: sheet.id,
+      rooms: JSON.parse(JSON.stringify(sheet.rooms))
+    });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    updateUndoButtonUI();
+  }
+
+  function performUndo() {
+    const st = getState();
+    if (!st || st.adminRole === 'NONE') return;
+    if (undoStack.length === 0) {
+      notify('Không còn thao tác nào để hoàn tác.');
+      return;
+    }
+    const snap = undoStack.pop();
+    const targetSheet = st.sheets.find(s => s.id === snap.sheetId);
+    if (targetSheet) {
+      targetSheet.rooms = snap.rooms;
+      getMap().saveStorage();
+      getMap().render();
+      refreshInspectorPanel();
+      renderVertexHandlesOnMap();
+      notify('↩️ Đã hoàn tác thao tác vừa rồi (Ctrl+Z)');
+    }
+    updateUndoButtonUI();
+  }
+
+  function updateUndoButtonUI() {
+    const btn = document.getElementById('btn-admin-undo');
+    if (!btn) return;
+    btn.disabled = undoStack.length === 0;
+    btn.textContent = undoStack.length > 0 ? `↩️ Hoàn tác (${undoStack.length})` : '↩️ Hoàn tác';
+    btn.className = undoStack.length > 0
+      ? 'px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition shadow'
+      : 'px-2.5 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs font-bold cursor-not-allowed';
+  }
+
   function notify(text) {
     const el = document.getElementById('admin-toast');
     if (!el) return;
@@ -135,6 +180,7 @@
         entryBtn.innerHTML = '<span>🔒</span><span>Admin</span>';
         entryBtn.className = 'px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 transition';
       }
+      if (window.NQDStreetView) window.NQDStreetView.setAdminTabActive(false);
       getMap().render();
       return;
     }
@@ -265,7 +311,10 @@
     function onMove(ev) {
       const dx = (ev.clientX - startX) / st.zoom;
       const dy = (ev.clientY - startY) / st.zoom;
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) hasMoved = true;
+      if (!hasMoved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+        hasMoved = true;
+        pushUndoSnapshot();
+      }
       if (!hasMoved) return;
 
       startPositions.forEach(item => {
@@ -326,6 +375,7 @@
         const sy = e.clientY;
         const ow = room.w;
         const oh = room.h;
+        pushUndoSnapshot();
 
         function onMove(ev) {
           let nw = ow + (ev.clientX - sx) / st.zoom;
@@ -369,6 +419,7 @@
           const sy = e.clientY;
           const ox = pt.x;
           const oy = pt.y;
+          pushUndoSnapshot();
 
           function onMove(ev) {
             const dx = (ev.clientX - sx) / st.zoom;
@@ -905,7 +956,8 @@
         });
         document.querySelectorAll('.studio-tab-pane').forEach(p => p.classList.add('hidden'));
         document.getElementById('studio-pane-' + target)?.classList.remove('hidden');
-        if (target === 'header') refreshHeaderAndTagsTab();
+        if (target === 'header' || target === 'sponsors') refreshHeaderAndTagsTab();
+        if (window.NQDStreetView) { window.NQDStreetView.setAdminTabActive(target === 'streetview'); if (target === 'streetview') window.NQDStreetView.refreshAdminStreetViewTab(); }
       });
     });
 
@@ -935,6 +987,7 @@
         return;
       }
       const id = 'booth_' + Date.now();
+      pushUndoSnapshot();
       sheet.rooms.push({
         id,
         name: 'Gian hàng CLB',
@@ -968,6 +1021,7 @@
       const sheet = getMap().getActiveSheet();
       if (sheet.lockedOrigin && !AdminConfig.unlockOriginMap) return;
       const id = 'tree_' + Date.now();
+      pushUndoSnapshot();
       sheet.rooms.push({
         id,
         name: '🌳 Ô Cây xanh',
@@ -995,11 +1049,50 @@
       refreshInspectorPanel();
     });
 
+    
+    document.getElementById('btn-adm-add-step')?.addEventListener('click', () => {
+      const st = getState();
+      const sheet = getMap().getActiveSheet();
+      if (sheet.lockedOrigin && !AdminConfig.unlockOriginMap) {
+        notify('Hãy mở khóa Map Gốc hoặc chuyển sang Sheet Sự kiện.');
+        return;
+      }
+      const id = 'step_' + Date.now();
+      pushUndoSnapshot();
+      sheet.rooms.push({
+        id,
+        name: 'Bậc thang',
+        floor: 'TRET',
+        category: 'NGOAIVI',
+        isStep: true,
+        x: 720,
+        y: 1234,
+        w: 32,
+        h: 14,
+        color: '#fbbf24',
+        textColor: '#0f172a',
+        fontSize: 8,
+        angle: 0,
+        shape: 'rect',
+        tags: [],
+        tooltipEmoji: '🪜',
+        tooltipText: 'Bậc thang lên xuống hành lang',
+        tooltipBg: '#fef3c7',
+        desc: 'Ô bậc thang đánh dấu lối lên xuống hành lang.'
+      });
+      st.selectedRoomId = id;
+      st.multiSelectedIds = [id];
+      getMap().render();
+      refreshInspectorPanel();
+      notify('🪜 Đã thêm ô Bậc thang mới — Kéo đặt vào đúng vị trí lối lên xuống!');
+    });
+
     document.getElementById('btn-adm-delete-room')?.addEventListener('click', () => {
       const targets = getSelectedEditableRooms('moveResize');
       if (targets.length === 0) return;
       const sheet = getMap().getActiveSheet();
       const delSet = new Set(targets.map(r => r.id));
+      pushUndoSnapshot();
       sheet.rooms = sheet.rooms.filter(r => !delSet.has(r.id));
       getState().selectedRoomId = null;
       getState().multiSelectedIds = [];
