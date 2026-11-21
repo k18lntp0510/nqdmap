@@ -1,0 +1,2398 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>THPT Chuyên Nguyễn Quang Diêu — Bản Đồ Số Tương Tác (MAP + ADMIN STUDIO)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Pacifico&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" />
+  <style id="external-effect-css"></style>
+  <style>
+    :root {
+      --map-bg: #f8fafc;
+    }
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Times New Roman', Times, serif;
+      background-color: var(--map-bg);
+      color: #0f172a;
+    }
+    .studio-font {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Grid Overlay ONLY when editing in Admin Mode (10px & 50px studio alignment grid) */
+    .admin-grid-overlay {
+      background-image:
+        linear-gradient(to right, rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+        linear-gradient(to right, rgba(15, 23, 42, 0.22) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(15, 23, 42, 0.22) 1px, transparent 1px);
+      background-size: 10px 10px, 10px 10px, 50px 50px, 50px 50px;
+    }
+    /* Filter Dimming Effect (A3: 10% opacity, grayscale, sink down) */
+    .room-dimmed {
+      opacity: 0.10 !important;
+      filter: grayscale(100%) contrast(75%) !important;
+      transform: scale(0.96) translateY(2px) !important;
+    }
+    .room-route-lit {
+      opacity: 1 !important;
+      filter: none !important;
+      z-index: 35 !important;
+      box-shadow: 0 0 0 3px #ef4444, 0 8px 20px rgba(239, 68, 68, 0.45) !important;
+    }
+    .room-selected {
+      box-shadow: 0 0 0 3.5px #ef4444, 0 6px 18px rgba(239, 68, 68, 0.45) !important;
+      z-index: 32 !important;
+    }
+    .room-multi-selected {
+      box-shadow: 0 0 0 3.5px #ec4899, 0 0 16px rgba(236, 72, 153, 0.7) !important;
+      z-index: 33 !important;
+    }
+    @keyframes flagWave {
+      0%, 100% { transform: skewY(0deg) scaleX(1); }
+      50% { transform: skewY(-5deg) scaleX(0.92); }
+    }
+    .flag-wave {
+      display: inline-block;
+      animation: flagWave 2.2s ease-in-out infinite;
+      transform-origin: left center;
+    }
+    #pc-cute-tooltip {
+      pointer-events: none;
+      transition: opacity 0.14s ease;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.2); }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); border-radius: 9999px; }
+
+    @keyframes nqdDashFlow { to { stroke-dashoffset: -44; } }
+    .route-line-casing { fill: none; stroke: #0f172a; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; opacity: 0.88; }
+    .route-line-main { fill: none; stroke: #ef4444; stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14 8; animation: nqdDashFlow 0.85s linear infinite; }
+    .fixed-event-line-casing { fill: none; stroke: #ffffff; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; }
+    .fixed-event-line-main { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 10 6; animation: nqdDashFlow 1.3s linear infinite; }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col overflow-hidden">
+
+  <!-- SEASONAL PARTICLE CANVAS & EXTERNAL INJECTED CODE CONTAINER -->
+  <canvas id="seasonal-effect-canvas" class="fixed inset-0 pointer-events-none z-40"></canvas>
+  <div id="external-effect-html" class="fixed inset-0 pointer-events-none z-40"></div>
+
+  <!-- 1. KHUNG HEADER NỔI BẬT TƯƠNG PHẢN (Tách biệt hoàn toàn khỏi Map - A5a) -->
+  <header class="w-full bg-[#090d16] text-white border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-2 z-30 shrink-0 shadow-lg">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div id="header-logos-strip" class="flex items-center gap-1.5 shrink-0"></div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h1 id="header-title" class="text-sm sm:text-base md:text-lg font-bold truncate tracking-wide">
+            THPT Chuyên Nguyễn Quang Diêu
+          </h1>
+          <span id="header-event-date" class="hidden text-[11px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full whitespace-nowrap"></span>
+        </div>
+        <p class="text-[10px] sm:text-xs text-slate-400 truncate">
+          458 Lê Đại Hành, Phường Mỹ Phú, TP. Cao Lãnh, Đồng Tháp
+        </p>
+      </div>
+    </div>
+
+    <!-- Cụm nút bên phải Header: Nhà tài trợ, Hiệu ứng mùa, Màu nền, Admin -->
+    <div class="flex items-center gap-1.5 shrink-0 studio-font">
+      <button id="btn-open-sponsors" class="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-400/30 text-xs font-bold flex items-center gap-1 transition">
+        <span>🤝</span>
+        <span class="hidden sm:inline">Các nhà tài trợ</span>
+      </button>
+
+      <select id="select-season-preview" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none">
+        <option value="none">🌤️ Mùa</option>
+        <option value="snow">❄️ Tuyết</option>
+        <option value="sakura">🌸 Đào</option>
+        <option value="autumn">🍁 Thu</option>
+        <option value="halloween">🎃 Lễ hội</option>
+      </select>
+
+      <label class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition">
+        <span class="hidden md:inline text-slate-300">Nền:</span>
+        <input id="input-map-bg" type="color" value="#f8fafc" class="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0" />
+      </label>
+
+      <button id="btn-admin-login-toggle" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 transition">
+        <span>🔒</span>
+        <span>Admin</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. THANH TÌM KIẾM & BỘ LỌC CUỘN NGANG 1 DÒNG (Tối ưu Điện thoại - A5b) -->
+  <section class="w-full bg-[#0f172a] text-white border-b border-slate-800 px-3 py-1.5 flex flex-col gap-1.5 z-20 shrink-0 studio-font">
+    <div class="flex items-center gap-2">
+      <div id="search-box-wrapper" class="relative flex-1">
+        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+        <input id="input-room-search" type="text" placeholder="Tìm tên phòng, lớp học, CLB, cây xanh..." class="w-full pl-8 pr-7 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-sky-400" />
+        <button id="btn-clear-search" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">✖</button>
+        <div id="search-suggestions-box" class="hidden absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50"></div>
+      </div>
+      <button id="btn-open-where-am-i" class="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold whitespace-nowrap shrink-0">📍 Tôi đang ở đâu?</button>
+      <button id="btn-open-qr-stations" class="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold whitespace-nowrap shrink-0">📷 QR 20m</button>
+      <button id="btn-open-streetview" class="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold whitespace-nowrap shrink-0">🌐 Street View</button>
+    </div>
+
+    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+      <button data-floor="ALL" class="pill-floor-btn px-3 py-1 rounded-full text-xs font-bold bg-sky-500 text-white whitespace-nowrap shrink-0">Tất cả</button>
+      <button data-floor="TRET" class="pill-floor-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">Trệt</button>
+      <button data-floor="LAU1" class="pill-floor-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">Lầu 1</button>
+      <button data-floor="LAU2" class="pill-floor-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">Lầu 2</button>
+      <button data-floor="HANHCHINH" class="pill-floor-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">Khu Hành chính</button>
+
+      <span class="text-slate-600 px-0.5 shrink-0">|</span>
+
+      <button data-cat="LOPHOC" class="pill-cat-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">🏫 Lớp học</button>
+      <button data-cat="PHONGTN" class="pill-cat-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">🔬 Phòng TN/BM</button>
+      <button data-cat="HANHCHINH" class="pill-cat-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">🏛️ Hành chính</button>
+      <button data-cat="NGOAIVI" class="pill-cat-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">🌳 Ngoại vi & Cây xanh</button>
+      <button data-cat="WC" class="pill-cat-btn px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap shrink-0">🚻 WC</button>
+
+      <span class="text-slate-600 px-0.5 shrink-0">|</span>
+
+      <div id="dynamic-tag-pills" class="flex items-center gap-1.5 shrink-0"></div>
+    </div>
+  </section>
+
+  <!-- 3. WORKSPACE CHÍNH: CHIA ĐÔI TỶ LỆ 6/4 KHI MỞ ADMIN STUDIO (V.1) -->
+  <main id="main-workspace" class="flex-1 flex overflow-hidden relative">
+    <!-- BÊN TRÁI (60% khi mở Admin, 100% khi khách xem): KHUNG BẢN ĐỒ 2D -->
+    <div id="map-viewport" class="relative flex-1 h-full overflow-hidden cursor-grab active:cursor-grabbing" style="touch-action: none;">
+      <div id="active-route-banner" class="hidden absolute top-3 left-3 right-3 max-w-xl mx-auto bg-slate-950/95 text-white border-2 border-sky-400 rounded-2xl px-3.5 py-2 items-center justify-between gap-2 z-30 shadow-2xl studio-font">
+        <div class="min-w-0">
+          <div id="route-banner-endpoints" class="text-xs sm:text-sm font-bold truncate"></div>
+          <div id="route-banner-sub" class="text-[11px] text-sky-300 truncate"></div>
+        </div>
+        <button id="btn-clear-active-route" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0">✖ Tắt chỉ đường</button>
+      </div>
+      <div id="map-world" class="absolute top-0 left-0 origin-top-left" style="width: 1850px; height: 1700px;">
+
+        <!-- LỚP 1: NỀN KHUÔN VIÊN, ĐƯỜNG NỘI BỘ VỆ TINH, SÂN TRƯỜNG & HÀNH LANG -->
+        <svg id="campus-base-svg" class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1850 1700">
+          <defs>
+            <pattern id="courtyardGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+              <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#94a3b8" stroke-width="0.6" stroke-opacity="0.45" />
+            </pattern>
+          </defs>
+
+          <rect x="25" y="20" width="1800" height="1650" rx="42" fill="#f1f5f9" fill-opacity="0.55" stroke="#cbd5e1" stroke-width="2" />
+
+          <rect x="0" y="1600" width="1850" height="80" fill="#334155" />
+          <line x1="0" y1="1640" x2="1850" y2="1640" stroke="#f8fafc" stroke-width="2.5" stroke-dasharray="22,16" stroke-opacity="0.7" />
+          <text x="860" y="1632" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="bold" letter-spacing="3">ĐƯỜNG LÊ ĐẠI HÀNH — TP. CAO LÃNH, ĐỒNG THÁP</text>
+
+          <path d="M 235 1600 L 235 200 Q 235 42 400 42 L 1520 42 Q 1795 42 1795 220 L 1795 1600"
+                fill="none" stroke="#94a3b8" stroke-width="38" stroke-opacity="0.32" stroke-linecap="round" />
+          <path d="M 235 1600 L 235 200 Q 235 42 400 42 L 1520 42 Q 1795 42 1795 220 L 1795 1600"
+                fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="10,10" stroke-opacity="0.45" />
+
+          <rect x="560" y="720" width="600" height="520" fill="#cfd6df" stroke="#94a3b8" stroke-width="1.5" />
+          <rect x="560" y="720" width="600" height="520" fill="url(#courtyardGrid)" />
+
+          <rect id="restricted-flag-courtyard" x="780" y="752" width="160" height="235" rx="10"
+                fill="#fef08a" fill-opacity="0.18" stroke="#eab308" stroke-width="1.5" stroke-dasharray="6,6" />
+          <text x="860" y="978" text-anchor="middle" fill="#854d0e" font-size="11" font-style="italic" opacity="0.8">Khu vực Sân Chào Cờ</text>
+
+          <path d="M 560 1140 A 100 100 0 0 1 660 1240 L 560 1240 Z" fill="#f5e1b9" opacity="0.95" />
+
+          <rect x="518" y="1240" width="684" height="42" fill="#f5e1b9" />
+          <text x="860" y="1266" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold">Hành lang</text>
+
+          <rect x="518" y="492" width="42" height="790" fill="#f5e1b9" />
+          <text x="543" y="960" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold" transform="rotate(-90 543 960)">Hành lang</text>
+          <text x="543" y="610" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold" transform="rotate(-90 543 610)">Hành lang</text>
+
+          <rect x="1160" y="360" width="42" height="922" fill="#f5e1b9" />
+          <text x="1177" y="960" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold" transform="rotate(90 1177 960)">Hành lang</text>
+          <text x="1177" y="610" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold" transform="rotate(90 1177 610)">Hành lang</text>
+
+          <rect x="518" y="678" width="684" height="42" fill="#f5e1b9" />
+          <text x="685" y="704" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold">Hành lang</text>
+          <text x="1035" y="704" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold">Hành lang</text>
+
+          <rect x="816" y="360" width="88" height="132" fill="#f5e1b9" />
+          <text x="860" y="422" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold">Hành</text>
+          <text x="860" y="440" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="bold">lang</text>
+
+          <rect x="904" y="360" width="256" height="132" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" />
+
+          <rect x="1202" y="712" width="188" height="68" fill="#ffffff" fill-opacity="0.75" />
+          <text x="1296" y="751" text-anchor="middle" fill="#0f172a" font-size="14" font-weight="bold">Lối xuống căn tin</text>
+
+          <text x="1510" y="425" text-anchor="middle" fill="#0f172a" font-size="15" font-weight="bold">Kí túc xá ➔</text>
+
+          <rect x="330" y="716" width="188" height="26" fill="#f5d061" />
+          <text x="361" y="733" text-anchor="middle" font-size="12" font-weight="bold">Lầu 2</text>
+          <text x="423" y="733" text-anchor="middle" font-size="12" font-weight="bold">Lầu 1</text>
+          <text x="486" y="733" text-anchor="middle" font-size="12" font-weight="bold">Trệt</text>
+
+          <rect x="1202" y="780" width="188" height="26" fill="#f5d061" />
+          <text x="1233" y="797" text-anchor="middle" font-size="12" font-weight="bold">Lầu 2</text>
+          <text x="1295" y="797" text-anchor="middle" font-size="12" font-weight="bold">Lầu 1</text>
+          <text x="1358" y="797" text-anchor="middle" font-size="12" font-weight="bold">Trệt</text>
+        </svg>
+
+        <!-- LỚP 2: CÁC KHỐI PHÒNG HỌC, KHU VỰC, TRỤC BẤT BIẾN & 14 Ô CÂY XANH -->
+        <div id="rooms-layer" class="absolute inset-0 z-20"></div>
+
+        <!-- LỚP 3 (TOP LAYER): KHUNG CHỜ CHO MODULE ROUTING.JS -->
+        <svg id="wayfinding-svg" class="absolute inset-0 w-full h-full pointer-events-none z-30" viewBox="0 0 1850 1700"></svg>
+        <div id="wayfinding-badges-layer" class="absolute inset-0 pointer-events-none z-35"></div>
+        <div id="streetview-pins-layer" class="absolute inset-0 pointer-events-none z-35"></div>
+      </div>
+
+      <!-- CỤM NÚT ĐIỀU KHIỂN GÓC NHỎ DƯỚI CUỐI GÓC TRÁI (Requirement #3 & III.1) -->
+      <div class="absolute left-3 bottom-3 z-30 flex items-center gap-1.5 bg-[#090d16]/95 text-white p-1.5 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur-md studio-font">
+        <button id="btn-zoom-in" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold text-base transition" title="Phóng to (+)">＋</button>
+        <button id="btn-zoom-out" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold text-base transition" title="Thu nhỏ (-)">－</button>
+        <span id="zoom-level-readout" class="text-[11px] font-mono px-1.5 text-slate-300">55%</span>
+        <button id="btn-center-flagpole" class="px-2.5 h-8 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition shadow">
+          <span>🎯</span>
+          <span class="hidden sm:inline">Về tâm Cột cờ</span>
+        </button>
+      </div>
+
+      <!-- TOOLTIP KÍNH MỜ CUTE — STRICTLY PC ONLY -->
+      <div id="pc-cute-tooltip" class="hidden fixed z-50 px-3.5 py-2.5 rounded-2xl shadow-2xl border text-xs max-w-[250px] opacity-0">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 font-bold text-slate-900">
+            <span id="tip-emoji" class="text-sm">✨</span>
+            <span id="tip-title" class="truncate"></span>
+          </div>
+          <span id="tip-floor" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-900/10 text-slate-800 font-semibold shrink-0"></span>
+        </div>
+        <div id="tip-note" class="text-[11px] text-slate-700 mt-1 leading-snug"></div>
+      </div>
+    </div>
+
+    <!-- BÊN PHẢI (40%): BẢNG CÔNG CỤ ADMIN STUDIO (Zero-Instruction UI) -->
+    <aside id="admin-studio-aside" class="hidden w-full md:w-[40%] max-w-[540px] h-full bg-[#090d16] text-slate-100 border-l border-slate-800 flex-col z-30 shrink-0 studio-font overflow-hidden">
+      <!-- Top Status Header of Studio Panel -->
+      <div class="px-3 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span id="admin-role-badge" class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[11px] font-bold">👑 FULL ADMIN</span>
+          <span id="adm-cloud-status" class="text-[11px] text-emerald-400 font-semibold truncate">☁️ Đã đồng bộ Cloud</span>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span id="admin-current-sheet-name" class="text-[11px] text-sky-400 font-bold">🔒 Map Gốc</span>
+          <button id="btn-studio-push-cloud" class="px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold">☁️ Đẩy Cloud</button>
+          <button id="btn-studio-exit" class="px-2 py-1 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white text-[11px] font-bold">Thoát</button>
+        </div>
+      </div>
+
+      <!-- 4 Studio Tabs -->
+      <div class="flex items-center bg-slate-950 border-b border-slate-800 shrink-0">
+        <button data-tab="inspector" class="studio-tab-btn flex-1 py-2 text-[11px] font-bold border-b-2 border-sky-400 text-sky-400 bg-slate-900/90">🏫 Phòng & Khối</button>
+        <button data-tab="header" class="studio-tab-btn fa-only-tab flex-1 py-2 text-[11px] font-bold border-b-2 border-transparent text-slate-400 hover:text-white">🎨 Header & Nhãn</button>
+        <button data-tab="sponsors" class="studio-tab-btn fa-only-tab flex-1 py-2 text-[11px] font-bold border-b-2 border-transparent text-slate-400 hover:text-white">🤝 Tài trợ & Mùa</button>
+        <button data-tab="security" class="studio-tab-btn fa-only-tab flex-1 py-2 text-[11px] font-bold border-b-2 border-transparent text-slate-400 hover:text-white">🔐 Bảo mật & Cloud</button>
+        <button data-tab="streetview" class="studio-tab-btn fa-only-tab flex-1 py-2 text-[11px] font-bold border-b-2 border-transparent text-slate-400 hover:text-white">🌐 Street</button>
+      </div>
+
+      <!-- TAB 1: PHÒNG, HÌNH KHỐI, KÉO ĐỈNH, CHỮ (< Ô) & NỘI THẤT -->
+      <div id="studio-pane-inspector" class="studio-tab-pane flex-1 overflow-y-auto p-3 space-y-3">
+        <!-- Quick Studio Bar -->
+        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label id="wrap-unlock-origin" class="flex items-center gap-1.5 text-xs font-bold text-amber-300 cursor-pointer">
+              <input id="chk-unlock-origin" type="checkbox" class="rounded bg-slate-950 border-slate-700 text-amber-500" />
+              <span>Mở khóa Map Gốc</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs font-bold text-sky-300 cursor-pointer">
+              <input id="chk-admin-grid" type="checkbox" checked class="rounded bg-slate-950 border-slate-700 text-sky-500" />
+              <span>Grid 10px</span>
+            </label>
+            <button id="btn-toggle-drag-mode" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold">✋ Kéo thả</button>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-adm-add-booth" class="flex-1 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">＋ Gian hàng / Khu vực</button>
+            <button id="btn-adm-add-tree" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">🌳 Cây xanh</button>
+            <button id="btn-adm-delete-room" class="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Active Selection Bar -->
+        <div class="flex items-center justify-between px-1">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Đang chọn:</span>
+            <span id="adm-selection-count" class="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold">10L</span>
+          </div>
+          <span id="adm-locked-axis-badge" class="hidden px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold">🔒 Khóa cứng</span>
+        </div>
+
+        <!-- Inspector Controls Body -->
+        <div id="adm-inspector-body" class="space-y-3">
+          <!-- Identity & Floor & Category & Repair Toggle -->
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <input id="adm-name" type="text" placeholder="Tên phòng / Gian hàng" class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-bold text-white focus:border-sky-400 focus:outline-none" />
+              <label class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-bold text-amber-300 cursor-pointer shrink-0">
+                <input id="adm-repair" type="checkbox" class="rounded text-amber-500" />
+                <span>🔧 Đang sửa</span>
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <select id="adm-floor" class="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white font-semibold">
+                <option value="TRET">Trệt</option>
+                <option value="LAU1">Lầu 1</option>
+                <option value="LAU2">Lầu 2</option>
+                <option value="HANHCHINH">Khu Hành chính</option>
+                <option value="ALL">Liên tầng</option>
+              </select>
+              <select id="adm-category" class="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white font-semibold">
+                <option value="LOPHOC">🏫 Lớp học</option>
+                <option value="PHONGTN">🔬 Phòng TN/BM</option>
+                <option value="HANHCHINH">🏛️ Hành chính</option>
+                <option value="NGOAIVI">🌳 Ngoại vi & Cây xanh</option>
+                <option value="WC">🚻 WC</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 pt-1">
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-0.5">X</span>
+                <input id="adm-x" type="number" step="5" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-xs text-white font-mono" />
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-0.5">Y</span>
+                <input id="adm-y" type="number" step="5" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-xs text-white font-mono" />
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-0.5">Rộng</span>
+                <input id="adm-w" type="number" step="5" min="20" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-xs text-white font-mono" />
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-0.5">Cao</span>
+                <input id="adm-h" type="number" step="5" min="20" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-xs text-white font-mono" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Shape Presets & Vertex Polygon Studio -->
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-slate-300">Hình khối & Đỉnh Đa Giác</span>
+              <div class="flex items-center gap-1.5">
+                <input id="adm-color" type="color" value="#4dd0e1" class="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0" />
+                <button id="btn-adm-vertex-mode" class="px-2 py-1 rounded bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-[11px] font-bold">📐 Kéo đỉnh</button>
+                <button id="btn-adm-add-vertex" class="px-1.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px] font-bold">＋Đỉnh</button>
+                <button id="btn-adm-remove-vertex" class="px-1.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 text-[11px] font-bold">－Đỉnh</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-6 gap-1">
+              <button data-shape="rect" class="adm-shape-btn py-1 rounded bg-sky-500 text-white text-[11px] font-bold">Chữ nhật</button>
+              <button data-shape="circle" class="adm-shape-btn py-1 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">Tròn</button>
+              <button data-shape="octagon" class="adm-shape-btn py-1 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">Bát giác</button>
+              <button data-shape="trapezoid" class="adm-shape-btn py-1 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">Thang</button>
+              <button data-shape="lshape" class="adm-shape-btn py-1 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">Chữ L</button>
+              <button data-shape="custom" class="adm-shape-btn py-1 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">Đa giác</button>
+            </div>
+            <input id="adm-polygon-points" type="text" placeholder="0 0, 100 0, 88 100, 12 100" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300" />
+          </div>
+
+          <!-- Typography Studio: Clamped Font Size (< Ô), Free Rotation, Font Link -->
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-slate-300">Chữ & Chiều Chữ</span>
+              <input id="adm-text-color" type="color" value="#0f172a" class="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <div class="flex justify-between text-[10px] text-slate-400">
+                  <span>Cỡ chữ (&lt; ô)</span>
+                  <span id="lbl-adm-fontsize" class="text-sky-400 font-bold">13px</span>
+                </div>
+                <input id="adm-fontsize" type="range" min="7" max="34" value="13" class="w-full accent-sky-500" />
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] text-slate-400">
+                  <span>Góc xoay</span>
+                  <span id="lbl-adm-angle" class="text-sky-400 font-bold">0°</span>
+                </div>
+                <input id="adm-angle" type="range" min="-180" max="180" step="5" value="0" class="w-full accent-sky-500" />
+              </div>
+            </div>
+            <div class="grid grid-cols-4 gap-1">
+              <button data-angle="0" class="adm-angle-preset py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold">0° Ngang</button>
+              <button data-angle="-90" class="adm-angle-preset py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold">-90° Dọc</button>
+              <button data-angle="90" class="adm-angle-preset py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold">+90° Dọc</button>
+              <button data-angle="stack" class="adm-angle-preset py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold">Xếp dọc</button>
+            </div>
+            <div class="grid grid-cols-12 gap-1.5">
+              <input id="adm-font-url" type="text" placeholder="Link Google Font" class="col-span-7 px-2 py-1 rounded bg-slate-950 border border-slate-800 text-[11px] text-white" />
+              <input id="adm-font-family" type="text" placeholder="Font-family" class="col-span-5 px-2 py-1 rounded bg-slate-950 border border-slate-800 text-[11px] text-white" />
+            </div>
+          </div>
+
+          <!-- PC Glassmorphic Tooltip Studio -->
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-slate-300">Tooltip PC</span>
+              <div class="flex items-center gap-1.5">
+                <input id="adm-tip-emoji" type="text" value="✨" class="w-8 py-0.5 rounded bg-slate-950 border border-slate-800 text-center text-xs" />
+                <input id="adm-tip-bg" type="color" value="#ffffff" class="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0" />
+              </div>
+            </div>
+            <input id="adm-tip-text" type="text" placeholder="Nội dung Tooltip PC..." class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+          </div>
+
+          <!-- Special Event Tags, Image, Description & Interior Layout -->
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <span class="block text-[11px] font-bold text-slate-300">Nhãn Sự Kiện & Popup</span>
+            <div id="adm-room-tags-box" class="flex flex-wrap gap-1"></div>
+            <div class="flex items-center gap-1.5">
+              <input id="adm-img-url" type="text" placeholder="URL Hình ảnh" class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+              <label class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold cursor-pointer shrink-0">
+                📁 Ảnh
+                <input id="adm-img-file" type="file" accept="image/*" class="hidden" />
+              </label>
+            </div>
+            <textarea id="adm-desc" rows="2" placeholder="Mô tả..." class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white"></textarea>
+
+            <div class="pt-1 border-t border-slate-800 flex items-center justify-between gap-2">
+              <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-400 cursor-pointer">
+                <input id="adm-interior-public" type="checkbox" class="rounded text-emerald-500" />
+                <span>🌐 Public Nội Thất</span>
+              </label>
+              <button id="btn-open-interior-designer" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+                🏛️ Nội thất (<span id="lbl-interior-count">0</span>)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: HEADER SỰ KIỆN, FONT CHỦ ĐỀ, LOGO ĐỒNG TỔ CHỨC & NHÃN SỰ KIỆN -->
+      <div id="studio-pane-header" class="studio-tab-pane hidden flex-1 overflow-y-auto p-3 space-y-3">
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-400">Chế độ Bản đồ Sự kiện</span>
+            <input id="adm-ev-active" type="checkbox" class="w-4 h-4 rounded text-amber-500" />
+          </div>
+          <input id="adm-ev-title" type="text" placeholder="Tiêu đề Sự kiện trên Header" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+          <input id="adm-ev-date" type="text" placeholder="Ngày diễn ra" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+          <select id="adm-ev-font-preset" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white">
+            <option value="">-- Font chữ chủ đề --</option>
+            <option value="Times New Roman|">Times New Roman (Mặc định)</option>
+            <option value="Cinzel Decorative|https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&display=swap">Cinzel Decorative (Lễ hội / Halloween)</option>
+            <option value="Pacifico|https://fonts.googleapis.com/css2?family=Pacifico&display=swap">Pacifico (Hội trại Xuân)</option>
+            <option value="Plus Jakarta Sans|https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700&display=swap">Plus Jakarta Sans (STEM / Hiện đại)</option>
+          </select>
+          <input id="adm-ev-font-link" type="text" placeholder="Link Google Font tùy chỉnh" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+          <input id="adm-ev-font-name" type="text" placeholder="CSS Font-family" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white" />
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-sky-400">🚩 Logo Trường & CLB Đồng Tổ Chức</span>
+            <button id="btn-adm-add-logo" class="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold">＋ Thêm Logo</button>
+          </div>
+          <div id="adm-logos-list" class="space-y-1.5"></div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-300">⭐ Bộ lọc Nhãn Chú Ý Đặc Biệt</span>
+            <button id="btn-adm-add-tag" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold">＋ Thêm Nhãn</button>
+          </div>
+          <div id="adm-event-tags-manager" class="space-y-1.5"></div>
+        </div>
+      </div>
+
+      <!-- TAB 3: NHÀ TÀI TRỢ, LINE CỐ ĐỊNH, HIỆU ỨNG MÙA & Ô NHÚNG MÃ NGOÀI -->
+      <div id="studio-pane-sponsors" class="studio-tab-pane hidden flex-1 overflow-y-auto p-3 space-y-3">
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-xs font-bold text-amber-400">🤝 Các Nhà Tài Trợ</span>
+          <div class="grid grid-cols-12 gap-1.5">
+            <select id="adm-sp-tier" class="col-span-5 px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white">
+              <option value="Nhà Tài Trợ Kim Cương">💎 Kim Cương</option>
+              <option value="Nhà Tài Trợ Vàng">🥇 Vàng</option>
+              <option value="Nhà Tài Trợ Bạc">🥈 Bạc</option>
+              <option value="Đơn Vị Đồng Hành">🤝 Đồng hành</option>
+            </select>
+            <input id="adm-sp-logo" type="text" placeholder="Logo/Chữ" class="col-span-3 px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white text-center" />
+            <input id="adm-sp-name" type="text" placeholder="Tên NTT" class="col-span-4 px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white" />
+          </div>
+          <div class="flex gap-1.5">
+            <input id="adm-sp-link" type="text" placeholder="Link Fanpage / Website" class="flex-1 px-2.5 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white" />
+            <button id="btn-adm-add-sponsor" class="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">＋ Thêm</button>
+          </div>
+          <div id="adm-sponsors-manager" class="space-y-1 max-h-28 overflow-y-auto"></div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-xs font-bold text-emerald-400">🧭 Line Dẫn Đường Cố Định</span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <select id="adm-fl-from" class="px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white"></select>
+            <select id="adm-fl-to" class="px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white"></select>
+          </div>
+          <div class="flex gap-1.5">
+            <input id="adm-fl-label" type="text" placeholder="Nhãn lộ trình" class="flex-1 px-2.5 py-1.5 rounded bg-slate-950 border border-slate-800 text-xs text-white" />
+            <input id="adm-fl-color" type="color" value="#10b981" class="w-8 h-8 rounded border-0 bg-transparent p-0 cursor-pointer" />
+            <button id="btn-adm-add-fixed-line" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">＋ Line</button>
+          </div>
+          <div id="adm-fixed-lines-manager" class="space-y-1"></div>
+        </div>
+
+        <!-- Seasonal Effects & External Code Injection Box -->
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-xs font-bold text-sky-400">❄️ Hiệu Ứng Mùa & Ô Nhúng Mã Ngoài</span>
+          <div class="grid grid-cols-3 gap-1">
+            <button data-fx="none" class="adm-fx-btn py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">Tắt</button>
+            <button data-fx="snow" class="adm-fx-btn py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">❄️ Tuyết</button>
+            <button data-fx="sakura" class="adm-fx-btn py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">🌸 Hoa đào</button>
+            <button data-fx="autumn" class="adm-fx-btn py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">🍁 Lá thu</button>
+            <button data-fx="halloween" class="adm-fx-btn py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">🎃 Lễ hội</button>
+            <button data-fx="custom" class="adm-fx-btn py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">✨ Hạt riêng</button>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            <input id="adm-fx-token" type="text" value="✨" placeholder="Emoji/Ký tự" class="px-2 py-1 rounded bg-slate-950 border border-slate-800 text-xs text-center text-white" />
+            <input id="adm-fx-count" type="range" min="15" max="110" value="45" class="accent-sky-500" title="Số lượng hạt" />
+            <input id="adm-fx-speed" type="range" min="0.5" max="3.5" step="0.5" value="1.4" class="accent-sky-500" title="Tốc độ rơi" />
+          </div>
+          <textarea id="adm-injected-code" rows="4" placeholder="<style>...</style> hoặc <div>...</div> hiệu ứng ngoài" class="w-full p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-300"></textarea>
+          <div class="flex gap-1.5">
+            <button id="btn-adm-run-injected" class="flex-1 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold">Chạy Mã Nhúng</button>
+            <button id="btn-adm-clear-injected" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold">Xóa</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: ĐỒNG BỘ FIREBASE CLOUD, ĐỔI MẬT KHẨU 2 CẤP & BẢNG QUYỀN ADMIN LITE -->
+      <div id="studio-pane-security" class="studio-tab-pane hidden flex-1 overflow-y-auto p-3 space-y-3">
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-xs font-bold text-sky-400">☁️ Đồng Bộ Firebase Realtime Database</span>
+          <input id="adm-firebase-url" type="text" value="https://nqd-map2-default-rtdb.firebaseio.com" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-amber-300" />
+          <div class="grid grid-cols-2 gap-1.5">
+            <button id="btn-adm-cloud-push" class="py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">☁️ Đẩy lên Cloud</button>
+            <button id="btn-adm-cloud-pull" class="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">🔄 Tải từ Cloud</button>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-xs font-bold text-rose-400">🔐 Mật Khẩu 2 Cấp Độ (FA & AL)</span>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <span class="block text-[10px] text-slate-400 mb-0.5">Full Admin (FA)</span>
+              <input id="adm-pass-fa" type="text" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white font-mono" />
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-400 mb-0.5">Admin Lite (AL)</span>
+              <input id="adm-pass-al" type="text" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white font-mono" />
+            </div>
+          </div>
+          <button id="btn-adm-save-passwords" class="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">💾 Lưu Mật Khẩu</button>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+          <span class="block text-xs font-bold text-amber-300">🛡️ Quyền Hạn Admin Lite (AL)</span>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Tạo ô Gian hàng mới</span>
+            <input data-perm="createBooth" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Di chuyển & Đổi kích thước Gian hàng</span>
+            <input data-perm="moveResize" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Đổi hình khối & Kéo đỉnh Đa giác</span>
+            <input data-perm="editShapeVertex" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Đổi cỡ chữ, chiều chữ & Link Font</span>
+            <input data-perm="editTypography" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Đổi tên, ảnh & mô tả Gian hàng</span>
+            <input data-perm="editContent" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Gắn nhãn Bộ lọc sự kiện</span>
+            <input data-perm="editTags" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-1.5 rounded bg-slate-950 text-xs cursor-pointer">
+            <span>Thiết kế Tooltip kính mờ PC</span>
+            <input data-perm="editTooltip" type="checkbox" checked class="adm-al-perm-chk rounded text-sky-500" />
+          </label>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-xs font-bold text-emerald-400">📦 Sao Lưu & Khôi Phục JSON</span>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button id="btn-adm-export-json" class="py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">⬇️ Xuất JSON</button>
+            <label class="py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold text-center cursor-pointer">
+              ⬆️ Nhập JSON
+              <input id="adm-import-json-file" type="file" accept=".json" class="hidden" />
+            </label>
+            <button id="btn-adm-reset-default" class="py-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white text-xs font-bold">🔄 Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: STREET VIEW STUDIO (GHÉP THỦ CÔNG TRỰC TIẾP) -->
+      <div id="studio-pane-streetview" class="studio-tab-pane hidden flex-1 overflow-y-auto p-3 space-y-3">
+        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-400">🌐 Điểm Đứng Panorama</span>
+            <span id="adm-sv-stats" class="text-[11px] text-amber-300 font-bold">1/33 ảnh</span>
+          </div>
+          <div class="flex gap-1.5">
+            <button id="btn-adm-sv-pick-map" class="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">＋ Chấm điểm trên Map</button>
+            <button id="btn-adm-sv-delete-node" class="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">🗑️</button>
+          </div>
+          <div id="adm-sv-nodes-list" class="space-y-1 max-h-44 overflow-y-auto pr-1"></div>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+          <span class="block text-[11px] font-bold text-sky-400">Chỉnh Điểm Đang Chọn</span>
+          <input id="adm-sv-name" type="text" placeholder="Tên vị trí chụp..." class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-bold text-white" />
+          <select id="adm-sv-floor" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white font-semibold">
+            <option value="TRET">Trệt (Tầng 1)</option>
+            <option value="LAU1">Lầu 1 (Tầng 2)</option>
+            <option value="LAU2">Lầu 2 (Tầng 3)</option>
+          </select>
+          <div class="flex gap-1.5">
+            <input id="adm-sv-img-path" type="text" placeholder="panoramas/tuong_cu.jpg hoặc https://..." class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-amber-200" />
+            <label class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold cursor-pointer shrink-0">
+              📁 Test
+              <input id="adm-sv-local-file" type="file" accept="image/*" class="hidden" />
+            </label>
+          </div>
+          <button id="btn-adm-sv-open-editor" class="w-full py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold shadow">
+            🎯 Mở Ảnh & Chấm Mũi Tên Thủ Công
+          </button>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- 4. THANH QUẢN LÝ ĐA SHEET NHƯ EXCEL Ở ĐÁY MÀN HÌNH (Chỉ hiện khi mở Admin) -->
+  <nav id="admin-sheet-bar" class="hidden w-full bg-[#060911] text-white border-t border-slate-800 px-3 py-1.5 items-center justify-between gap-2 z-30 shrink-0 studio-font">
+    <div id="sheet-tabs-list" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar"></div>
+    <button id="btn-create-event-sheet" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shrink-0">
+      ＋ Tạo Sheet Sự Kiện Mới
+    </button>
+  </nav>
+
+  <!-- 5. THANH TÁC VỤ ĐÁY CHỐNG CHẠM NHẦM TRÊN ĐIỆN THOẠI (III.2) -->
+  <footer id="bottom-room-action-bar" class="hidden w-full bg-[#090d16] text-white border-t border-slate-800 px-3 py-2 items-center justify-between gap-2 z-30 shrink-0 studio-font shadow-2xl">
+    <div class="flex items-center gap-2 min-w-0">
+      <span id="action-bar-dot" class="w-3.5 h-3.5 rounded-full shrink-0 border border-white/50"></span>
+      <span id="action-bar-name" class="text-xs sm:text-sm font-bold truncate"></span>
+      <span id="action-bar-floor" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-sky-300 shrink-0"></span>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button id="btn-action-info" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1 transition">
+        <span>ℹ️</span>
+        <span>Xem thông tin</span>
+      </button>
+      <button id="btn-action-point-a" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 transition">
+        <span>📍</span>
+        <span>Điểm đi (A)</span>
+      </button>
+      <button id="btn-action-point-b" class="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1 transition">
+        <span>🚩</span>
+        <span>Điểm đến (B)</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- 6. POPUP THÔNG TIN Ở CHÍNH GIỮA MÀN HÌNH (2/5 diện tích & Khóa vuốt map bên dưới) -->
+  <div id="room-info-popup" class="hidden fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-50 items-center justify-center p-4">
+    <div class="w-full max-w-md min-h-[38vh] max-h-[44vh] bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-4 py-2.5 bg-[#090d16] border-b border-slate-800 flex items-center justify-between">
+        <h3 id="popup-title" class="text-base font-bold truncate"></h3>
+        <button id="btn-close-popup" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold studio-font">✖ Đóng</button>
+      </div>
+
+      <div id="popup-repair-state" class="hidden flex-1 items-center justify-center p-6 text-center">
+        <span class="text-lg font-bold text-amber-400 tracking-wide">Đang cập nhật</span>
+      </div>
+
+      <div id="popup-normal-state" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div id="popup-tags" class="flex flex-wrap gap-1.5"></div>
+        <div id="popup-img-container" class="hidden">
+          <img id="popup-img" src="" alt="" class="w-full h-36 object-cover rounded-xl border border-slate-700 cursor-zoom-in" />
+        </div>
+        <p id="popup-description" class="text-sm text-slate-200 leading-relaxed"></p>
+        <button id="btn-popup-view-interior" class="hidden w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold studio-font">
+          🏛️ Xem bố cục nội thất bên trong
+        </button>
+      </div>
+
+      <div class="px-4 py-2.5 bg-[#090d16] border-t border-slate-800 flex items-center gap-2 studio-font">
+        <button id="btn-popup-set-a" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">
+          📍 Điểm đi (A)
+        </button>
+        <button id="btn-popup-set-b" class="flex-1 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">
+          🚩 Chỉ đường tới đây (B)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. LIGHTBOX PHÓNG TO ẢNH TOÀN MÀN HÌNH -->
+  <div id="fullscreen-lightbox" class="hidden fixed inset-0 bg-black/90 z-50 items-center justify-center p-4 cursor-zoom-out">
+    <img id="lightbox-image" src="" alt="" class="max-w-full max-h-full rounded-xl shadow-2xl" />
+  </div>
+
+  <!-- 8. TRANG KÉO CÁC NHÀ TÀI TRỢ -->
+  <div id="sponsors-drawer-modal" class="hidden fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 items-center justify-center p-4 studio-font">
+    <div class="w-full max-w-lg max-h-[80vh] bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-[#090d16] border-b border-slate-800 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-amber-400">🤝 CÁC NHÀ TÀI TRỢ & ĐƠN VỊ ĐỒNG HÀNH</h3>
+        <button id="btn-close-sponsors" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold">✖ Đóng</button>
+      </div>
+      <div id="sponsors-drawer-body" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+    </div>
+  </div>
+
+  <!-- 9. MODAL XEM NỘI THẤT KHU VỰC LỚN (Chế độ Khách xem) -->
+  <div id="interior-layout-modal" class="hidden fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 items-center justify-center p-4 studio-font">
+    <div class="w-full max-w-lg bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-[#090d16] border-b border-slate-800 flex items-center justify-between">
+        <h3 id="interior-layout-title" class="text-sm font-bold text-indigo-300"></h3>
+        <button id="btn-close-interior-modal" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold">✖ Đóng</button>
+      </div>
+      <div class="p-4">
+        <div id="interior-layout-canvas" class="relative w-full h-72 rounded-xl bg-slate-950 border-2 border-dashed border-indigo-500/40 overflow-hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. MODAL THIẾT KẾ NỘI THẤT KHU VỰC LỚN (Chế độ Admin Studio) -->
+  <div id="admin-interior-designer-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 items-center justify-center p-4 studio-font">
+    <div class="w-full max-w-xl bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-[#090d16] border-b border-slate-800 flex items-center justify-between">
+        <h3 id="adm-int-modal-title" class="text-sm font-bold text-indigo-300">🏛️ Thiết kế Nội thất</h3>
+        <button id="btn-close-int-designer" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold">✖ Đóng</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="flex gap-2">
+          <input id="adm-new-subbooth-title" type="text" placeholder="Tên quầy / sân khấu..." class="flex-1 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white" />
+          <button id="btn-adm-add-subbooth" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">＋ Thêm Ô Nội Thất</button>
+        </div>
+        <div id="adm-int-designer-canvas" class="relative w-full h-64 rounded-xl bg-slate-950 border-2 border-dashed border-sky-500/50 overflow-hidden"></div>
+        <div id="adm-int-subbooths-list" class="grid grid-cols-2 gap-1.5 max-h-28 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11. MODAL ĐĂNG NHẬP 2 CẤP ĐỘ ADMIN (FA / AL) -->
+  <div id="admin-auth-modal" class="hidden fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 items-center justify-center p-4 studio-font">
+    <div class="w-full max-w-sm bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-sky-400">🔐 Đăng Nhập Quản Trị</h3>
+        <button id="btn-close-auth-modal" class="text-slate-400 hover:text-white text-xs">✖</button>
+      </div>
+      <input id="adm-login-pass-input" type="password" placeholder="Mật khẩu Full Admin hoặc Admin Lite" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:border-sky-400 focus:outline-none" />
+      <div id="adm-login-error" class="hidden text-xs text-rose-400 font-bold">Mật khẩu không hợp lệ.</div>
+      <button id="btn-submit-auth" class="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold">Mở Khóa</button>
+    </div>
+  </div>
+
+
+  <!-- MODAL TÔI ĐANG Ở ĐÂU? -->
+  <div id="where-am-i-modal" class="hidden fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 items-center justify-center p-4 studio-font">
+    <div class="w-full max-w-md bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-sky-400">📍 Chọn Vị Trí Xuất Phát (Điểm A)</h3>
+        <button id="btn-close-where-am-i" class="text-slate-400 hover:text-white text-xs">✖</button>
+      </div>
+      <div id="where-qr-grid" class="grid grid-cols-3 gap-1.5 max-h-52 overflow-y-auto"></div>
+      <div class="flex gap-2 pt-2 border-t border-slate-800">
+        <select id="where-room-select" class="flex-1 px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"></select>
+        <button id="btn-confirm-where-room" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Chọn</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL HỆ THỐNG 12 TRẠM QR 20M -->
+  <div id="qr-stations-modal" class="hidden fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 items-center justify-center p-4 studio-font">
+    <div class="w-full max-w-lg max-h-[82vh] bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-[#090d16] border-b border-slate-800 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-amber-400">📷 Hệ Thống 12 Trạm Mã QR Định Vị 20m</h3>
+        <button id="btn-close-qr-stations" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold">✖ Đóng</button>
+      </div>
+      <div id="qr-single-preview" class="hidden p-3 bg-slate-950 border-b border-slate-800 flex flex-col items-center gap-1.5">
+        <div id="qr-single-title" class="text-xs font-bold text-emerald-400"></div>
+        <canvas id="qr-single-canvas" width="140" height="140" class="bg-white p-2 rounded-xl"></canvas>
+        <code id="qr-single-url" class="text-[10px] text-sky-400 break-all text-center"></code>
+      </div>
+      <div id="qr-stations-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+    </div>
+  </div>
+
+
+  <!-- MODAL STREET VIEW PANORAMA FULLSCREEN (MOBILE-FIRST + ADMIN ARROW STUDIO) -->
+  <div id="streetview-viewer-modal" class="hidden fixed inset-0 bg-black z-50 flex-col overflow-hidden studio-font">
+    <!-- Top HUD -->
+    <div class="w-full bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-2 z-30 shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-base">🌐</span>
+        <div class="min-w-0">
+          <div id="sv-viewer-title" class="text-xs sm:text-sm font-bold text-white truncate">Tượng Cụ</div>
+          <div class="flex items-center gap-2">
+            <span id="sv-viewer-floor-badge" class="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-bold">Trệt</span>
+            <span id="sv-compass-deg" class="text-[10px] font-mono text-amber-300">0°</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thanh công cụ Chấm Mũi Tên (Chỉ hiện khi đăng nhập Full Admin) -->
+      <div id="sv-viewer-admin-bar" class="hidden items-center gap-1.5">
+        <button id="btn-sv-toggle-place-arrow" class="px-3 py-1.5 rounded-xl bg-slate-800 text-fuchsia-300 border border-fuchsia-500/40 text-xs font-bold">
+          🎯 Chấm mũi tên lên ảnh
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="btn-sv-zoom-in" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm">＋</button>
+        <button id="btn-sv-zoom-out" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm">－</button>
+        <button id="btn-close-streetview" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">✖ Đóng</button>
+      </div>
+    </div>
+
+    <!-- Panoramic Stage -->
+    <div id="sv-pano-viewport" class="relative flex-1 w-full overflow-hidden bg-slate-950 cursor-grab active:cursor-grabbing" style="touch-action: none;">
+      <!-- Empty state when node has no photo yet -->
+      <div id="sv-empty-photo-state" class="hidden absolute inset-0 flex-col items-center justify-center p-6 text-center text-slate-300 space-y-2">
+        <span class="text-4xl">📷</span>
+        <div id="sv-empty-node-name" class="text-base font-bold text-white"></div>
+        <p class="text-xs text-slate-400 max-w-xs">Điểm này chưa được gắn ảnh Panorama. Trong Admin Studio → tab 🌐 Street, hãy nhập đường dẫn ảnh (VD: panoramas/ten_anh.jpg).</p>
+      </div>
+
+      <div id="sv-pano-stage" class="relative w-full h-full">
+        <div id="sv-pano-canvas-box" class="absolute top-0 left-0 origin-top-left">
+          <img id="sv-pano-image" src="" alt="Panorama NQD" class="w-full h-full object-cover pointer-events-none select-none" draggable="false" />
+          <div id="sv-pano-arrows-layer" class="absolute inset-0 pointer-events-none"></div>
+        </div>
+      </div>
+
+      <!-- Inline Popup đặt Mũi tên mới khi Admin click lên mặt đường -->
+      <div id="sv-arrow-creator-box" class="hidden absolute top-4 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-slate-950/95 border-2 border-fuchsia-500 rounded-2xl p-3.5 shadow-2xl z-40 space-y-2.5 text-white">
+        <div class="text-xs font-bold text-fuchsia-400">🎯 Gắn Mũi Tên Chuyển Cảnh Tại Vị Trí Này</div>
+        <select id="sv-new-arrow-target" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"></select>
+        <div class="grid grid-cols-12 gap-1.5">
+          <select id="sv-new-arrow-icon" class="col-span-5 px-2 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white">
+            <option value="⬆️">⬆️ Đi thẳng</option>
+            <option value="⬅️">⬅️ Rẽ trái</option>
+            <option value="➡️">➡️ Rẽ phải</option>
+            <option value="↩️">↩️ Quay lại</option>
+            <option value="🪜">🪜 Lên/Xuống tầng</option>
+          </select>
+          <input id="sv-new-arrow-label" type="text" placeholder="Nhãn ngắn (tùy chọn)" class="col-span-7 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white" />
+        </div>
+        <div class="flex gap-2">
+          <button id="btn-sv-confirm-arrow" class="flex-1 py-1.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold">✓ Lưu Mũi Tên</button>
+          <button id="btn-sv-cancel-arrow" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold">Hủy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Mini-Map & Floor Switcher Bar -->
+    <div class="w-full bg-slate-950/95 border-t border-slate-800 px-3 py-2 flex flex-col gap-1.5 z-30 shrink-0">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1">
+          <button data-floor="TRET" class="sv-viewer-floor-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-500 text-white">Trệt</button>
+          <button data-floor="LAU1" class="sv-viewer-floor-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300">Lầu 1</button>
+          <button data-floor="LAU2" class="sv-viewer-floor-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300">Lầu 2</button>
+        </div>
+        <span class="text-[10px] text-slate-400">Vuốt ngang để xoay • Bấm mũi tên để di chuyển</span>
+      </div>
+      <div id="sv-minimap-nodes" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5"></div>
+    </div>
+  </div>
+
+  <!-- TOAST THÔNG BÁO NHANH -->
+  <div id="admin-toast" class="hidden fixed bottom-16 right-4 z-50 px-3.5 py-2 rounded-xl bg-slate-950/95 text-white border border-slate-700 shadow-2xl text-xs font-bold studio-font"></div>
+
+  <!-- MODULE 1: MAP.JS -->
+  <script>
+(function (window) {
+  'use strict';
+
+  const STORAGE_KEY = 'NQD_MAP_DATA_V2';
+
+  const DEFAULT_EVENT_TAGS = [
+    { id: 'tag_letan', icon: '🛎️', label: 'Điểm liên hệ Lễ tân' },
+    { id: 'tag_checkin', icon: '📸', label: 'Điểm Hot Check-in' },
+    { id: 'tag_game', icon: '🎮', label: 'Điểm Trò chơi' },
+    { id: 'tag_food', icon: '🍔', label: 'Điểm Thức ăn' }
+  ];
+
+  const DEFAULT_SPONSORS = [
+    {
+      id: 'sp_1',
+      tier: 'Nhà Tài Trợ Kim Cương',
+      name: 'Đoàn Trường THPT Chuyên Nguyễn Quang Diêu',
+      logo: 'NQD',
+      link: 'https://www.google.com/maps/place/Nguy%E1%BB%85n+Quang+Di%C3%AAu+High+School+for+The+Gifted'
+    },
+    {
+      id: 'sp_2',
+      tier: 'Nhà Tài Trợ Vàng',
+      name: 'NQD Events & CLB Truyền Thông',
+      logo: 'EV',
+      link: 'https://ntp0812.github.io/nqdmap/'
+    },
+    {
+      id: 'sp_3',
+      tier: 'Đơn Vị Đồng Hành',
+      name: 'CLB STEM & Robotics NQD',
+      logo: 'ST',
+      link: 'https://ntp0812.github.io/nqdmap/'
+    }
+  ];
+
+  function createMasterRooms() {
+    return [
+      {
+        id: 'cong_chinh', name: 'Cổng chính', floor: 'TRET', category: 'HANHCHINH',
+        x: 760, y: 1545, w: 200, h: 38, color: '#f6ad49', textColor: '#0f172a',
+        fontSize: 15, angle: 0, shape: 'rect', locked: true,
+        tags: ['tag_letan'],
+        tooltipEmoji: '⛩️', tooltipText: 'Cổng chính THPT Chuyên Nguyễn Quang Diêu (458 Lê Đại Hành)', tooltipBg: '#fef3c7',
+        desc: 'Cổng chính trường THPT Chuyên Nguyễn Quang Diêu (Trục Trung Tâm Bất Biến).'
+      },
+      {
+        id: 'tuong_cu', name: 'Tượng Cụ', floor: 'TRET', category: 'HANHCHINH',
+        x: 834, y: 1450, w: 52, h: 52, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 11, angle: 0, shape: 'circle', locked: true,
+        tags: ['tag_checkin'],
+        tooltipEmoji: '🗽', tooltipText: 'Tượng Cụ Nguyễn Quang Diêu — Trục trung tâm', tooltipBg: '#e0f2fe',
+        desc: 'Tượng đài danh nhân Nguyễn Quang Diêu nằm trên trục chính diện Cổng trường và Cột cờ.'
+      },
+      {
+        id: 'cot_co', name: 'Cột cờ', floor: 'TRET', category: 'NGOAIVI',
+        x: 834, y: 920, w: 52, h: 52, color: '#ef4444', textColor: '#ffffff',
+        fontSize: 11, angle: 0, shape: 'circle', locked: true,
+        tags: ['tag_checkin'],
+        tooltipEmoji: '🇻🇳', tooltipText: 'Cột cờ trung tâm sân trường — Điểm mốc điều hướng', tooltipBg: '#fee2e2',
+        desc: 'Cột cờ trung tâm sân trường THPT Chuyên Nguyễn Quang Diêu (Khóa cứng tuyệt đối).'
+      },
+      {
+        id: 'thu_vien', name: 'Thư Viện', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 330, y: 1226, w: 188, h: 114, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 18, angle: 0, shape: 'octagon',
+        tags: ['tag_checkin'],
+        tooltipEmoji: '📚', tooltipText: 'Thư viện nhà trường (Kiến trúc mái tròn/bát giác trên vệ tinh)', tooltipBg: '#fef9c3',
+        desc: 'Thư viện trường THPT Chuyên Nguyễn Quang Diêu với khối kiến trúc mái tròn/bát giác đặc trưng ở góc Tây-Nam.'
+      },
+      {
+        id: 'sanh_thu_vien', name: 'Sảnh Thư Viện', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 330, y: 1340, w: 188, h: 66, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 16, angle: 0, shape: 'rect',
+        tags: [],
+        tooltipEmoji: '🏛️', tooltipText: 'Sảnh đón Thư viện', tooltipBg: '#ffedd5',
+        desc: 'Khu vực sảnh chính phía trước Thư viện.'
+      },
+      {
+        id: 'phong_truyen_thong', name: 'Phòng Truyền Thống', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 518, y: 1282, w: 115, h: 62, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 12, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🏅', tooltipText: 'Phòng Truyền Thống nhà trường', tooltipBg: '#ffedd5',
+        desc: 'Nơi lưu giữ bảng vàng thành tích và lịch sử trường THPT Chuyên Nguyễn Quang Diêu.'
+      },
+      {
+        id: 'cong_doan', name: 'Công đoàn', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 633, y: 1282, w: 75, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 12, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🤝', tooltipText: 'Văn phòng Công đoàn', tooltipBg: '#fef9c3',
+        desc: 'Phòng Công đoàn cơ sở nhà trường.'
+      },
+      {
+        id: 'khoang_dem_hc', name: 'Sảnh Nội Bộ', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 708, y: 1282, w: 50, h: 62, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 10, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🚪', tooltipText: 'Khoang sảnh nội bộ khu Hành chính', tooltipBg: '#ffedd5',
+        desc: 'Sảnh đệm kết nối nội bộ khu Hành chính.'
+      },
+      {
+        id: 'hoi_truong_nho', name: 'Hội trường nhỏ', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 758, y: 1282, w: 204, h: 62, color: '#29b6f6', textColor: '#0f172a',
+        fontSize: 15, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🎤', tooltipText: 'Hội trường nhỏ — Hội thảo & Sinh hoạt chuyên đề', tooltipBg: '#e0f2fe',
+        desc: 'Hội trường nhỏ phục vụ hội họp, chuyên đề học thuật và gặp gỡ đại biểu.'
+      },
+      {
+        id: 'phong_hop', name: 'Phòng họp', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 962, y: 1282, w: 120, h: 62, color: '#4dd0e1', textColor: '#0f172a',
+        fontSize: 14, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '📋', tooltipText: 'Phòng họp Hội đồng Sư phạm', tooltipBg: '#cffafe',
+        desc: 'Phòng họp Hội đồng và Ban giám hiệu.'
+      },
+      {
+        id: 'kho_hc', name: 'Kho', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 1082, y: 1282, w: 76, h: 62, color: '#17b8de', textColor: '#0f172a',
+        fontSize: 14, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '📦', tooltipText: 'Kho thiết bị Hành chính', tooltipBg: '#cffafe',
+        desc: 'Kho lưu trữ vật tư, thiết bị hành chính.'
+      },
+      {
+        id: 'wc_gv2', name: 'WC GV2', floor: 'HANHCHINH', category: 'WC',
+        x: 1158, y: 1282, w: 44, h: 62, color: '#d896ff', textColor: '#0f172a',
+        fontSize: 11, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🚻', tooltipText: 'WC Giáo viên 2', tooltipBg: '#f3e8ff',
+        desc: 'Khu vệ sinh Giáo viên 2.'
+      },
+      {
+        id: 'phong_giao_vien', name: 'Phòng Giáo viên', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 518, y: 1344, w: 115, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 12, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '👩‍🏫', tooltipText: 'Phòng Giáo viên', tooltipBg: '#fef9c3',
+        desc: 'Phòng nghỉ và trao đổi chuyên môn của Giáo viên.'
+      },
+      {
+        id: 'phong_hieu_pho_1', name: 'Phòng Hiệu phó', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 633, y: 1344, w: 75, h: 62, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 11, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '⭐', tooltipText: 'Phòng Phó Hiệu trưởng 1', tooltipBg: '#ffedd5',
+        desc: 'Phòng làm việc của Phó Hiệu trưởng.'
+      },
+      {
+        id: 'phong_hieu_truong', name: 'Phòng Hiệu trưởng', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 708, y: 1344, w: 50, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 9, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🌟', tooltipText: 'Phòng Hiệu trưởng', tooltipBg: '#fef9c3',
+        desc: 'Phòng làm việc của Hiệu trưởng nhà trường.'
+      },
+      {
+        id: 'van_phong', name: 'Văn Phòng', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 758, y: 1344, w: 58, h: 62, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 11, angle: 0, shape: 'rect', tags: ['tag_letan'],
+        tooltipEmoji: '🗂️', tooltipText: 'Văn phòng hành chính & Tiếp dân', tooltipBg: '#ffedd5',
+        desc: 'Văn phòng hành chính tiếp nhận công văn và hỗ trợ thông tin.'
+      },
+      {
+        id: 'sanh_thong_bao', name: 'Sảnh thông báo', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 816, y: 1344, w: 88, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 12, angle: 0, shape: 'rect', tags: ['tag_letan'],
+        tooltipEmoji: '📢', tooltipText: 'Sảnh thông báo trung tâm (Chính diện Tượng Cụ)', tooltipBg: '#fef9c3',
+        desc: 'Sảnh thông báo trung tâm nằm thẳng trục Cổng chính — Tượng Cụ — Cột cờ.'
+      },
+      {
+        id: 'vp_doan', name: 'VP Đoàn', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 904, y: 1344, w: 58, h: 62, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 11, angle: 0, shape: 'rect', tags: ['tag_letan'],
+        tooltipEmoji: '🔥', tooltipText: 'Văn phòng Đoàn TNCS Hồ Chí Minh', tooltipBg: '#ffedd5',
+        desc: 'Văn phòng Đoàn trường — Thường trực Ban tổ chức các sự kiện học sinh.'
+      },
+      {
+        id: 'phong_hieu_pho_2', name: 'Phòng Hiệu phó', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 962, y: 1344, w: 60, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 10, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '⭐', tooltipText: 'Phòng Phó Hiệu trưởng 2', tooltipBg: '#fef9c3',
+        desc: 'Phòng làm việc của Phó Hiệu trưởng.'
+      },
+      {
+        id: 'phong_hoc_vu', name: 'Phòng Học Vụ', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 1022, y: 1344, w: 60, h: 62, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 10, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '📑', tooltipText: 'Phòng Học Vụ & Đào tạo', tooltipBg: '#ffedd5',
+        desc: 'Phòng quản lý hồ sơ học tập và giáo vụ.'
+      },
+      {
+        id: 'phong_ky_thuat', name: 'Phòng kỹ thuật', floor: 'HANHCHINH', category: 'HANHCHINH',
+        x: 1082, y: 1344, w: 76, h: 62, color: '#f8dc52', textColor: '#0f172a',
+        fontSize: 10, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '⚡', tooltipText: 'Phòng Kỹ thuật & Âm thanh ánh sáng', tooltipBg: '#fef9c3',
+        desc: 'Phòng kỹ thuật điện, mạng và điều khiển hệ thống âm thanh.'
+      },
+      {
+        id: 'wc_gv1', name: 'WC GV1', floor: 'HANHCHINH', category: 'WC',
+        x: 1158, y: 1344, w: 44, h: 62, color: '#8c52ff', textColor: '#ffffff',
+        fontSize: 11, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🚻', tooltipText: 'WC Giáo viên 1', tooltipBg: '#f3e8ff',
+        desc: 'Khu vệ sinh Giáo viên 1.'
+      },
+
+      { id: 'r_10th', name: '10TH', floor: 'TRET', category: 'LOPHOC', x: 454, y: 742, w: 64, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '💻', tooltipText: 'Lớp 10 Chuyên Tin học (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Tin học (Tầng Trệt - Dãy Học Trái).' },
+      { id: 'r_10av2', name: '10AV2', floor: 'TRET', category: 'LOPHOC', x: 454, y: 830, w: 64, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🇬🇧', tooltipText: 'Lớp 10 Chuyên Anh 2 (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Tiếng Anh 2.' },
+      { id: 'sanh_av', name: 'Sảnh AV', floor: 'TRET', category: 'HANHCHINH', x: 454, y: 918, w: 64, h: 88, color: '#f8dc52', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: ['tag_checkin'], tooltipEmoji: '🌟', tooltipText: 'Sảnh Ngoại Ngữ (Sảnh AV)', tooltipBg: '#fef9c3', desc: 'Sảnh sinh hoạt CLB Tiếng Anh (ESC) và giao lưu ngoại ngữ.' },
+      { id: 'r_10av1', name: '10AV1', floor: 'TRET', category: 'LOPHOC', x: 454, y: 1006, w: 64, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🇬🇧', tooltipText: 'Lớp 10 Chuyên Anh 1 (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Tiếng Anh 1.' },
+      { id: 'r_10v', name: '10V', floor: 'TRET', category: 'LOPHOC', x: 454, y: 1094, w: 64, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: ['tag_food'], tooltipEmoji: '📖', tooltipText: 'Lớp 10 Chuyên Văn (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Ngữ Văn.' },
+
+      { id: 'r_11l', name: '11L', floor: 'LAU1', category: 'LOPHOC', x: 392, y: 742, w: 62, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '⚡', tooltipText: 'Lớp 11 Chuyên Lý (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Vật Lý.' },
+      { id: 'r_11th', name: '11TH', floor: 'LAU1', category: 'LOPHOC', x: 392, y: 830, w: 62, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '💻', tooltipText: 'Lớp 11 Chuyên Tin (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Tin học.' },
+      { id: 'r_11av2', name: '11AV2', floor: 'LAU1', category: 'LOPHOC', x: 392, y: 918, w: 62, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🇬🇧', tooltipText: 'Lớp 11 Chuyên Anh 2 (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Tiếng Anh 2.' },
+      { id: 'r_11av1', name: '11AV1', floor: 'LAU1', category: 'LOPHOC', x: 392, y: 1006, w: 62, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🇬🇧', tooltipText: 'Lớp 11 Chuyên Anh 1 (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Tiếng Anh 1.' },
+      { id: 'r_11v', name: '11V', floor: 'LAU1', category: 'LOPHOC', x: 392, y: 1094, w: 62, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '📖', tooltipText: 'Lớp 11 Chuyên Văn (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Ngữ Văn.' },
+
+      { id: 'r_12l', name: '12L', floor: 'LAU2', category: 'LOPHOC', x: 330, y: 742, w: 62, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '⚡', tooltipText: 'Lớp 12 Chuyên Lý (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Vật Lý.' },
+      { id: 'r_12th', name: '12TH', floor: 'LAU2', category: 'LOPHOC', x: 330, y: 830, w: 62, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '💻', tooltipText: 'Lớp 12 Chuyên Tin (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Tin học.' },
+      { id: 'r_12av2', name: '12AV2', floor: 'LAU2', category: 'LOPHOC', x: 330, y: 918, w: 62, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🇬🇧', tooltipText: 'Lớp 12 Chuyên Anh 2 (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Tiếng Anh 2.' },
+      { id: 'r_12av1', name: '12AV1', floor: 'LAU2', category: 'LOPHOC', x: 330, y: 1006, w: 62, h: 88, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🇬🇧', tooltipText: 'Lớp 12 Chuyên Anh 1 (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Tiếng Anh 1.' },
+      { id: 'r_12v', name: '12V', floor: 'LAU2', category: 'LOPHOC', x: 330, y: 1094, w: 62, h: 88, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '📖', tooltipText: 'Lớp 12 Chuyên Văn (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Ngữ Văn.' },
+
+      { id: 'stair_west', name: 'Cầu thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 330, y: 1182, w: 188, h: 44, color: '#38b6ff', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Dãy Học Trái (Trệt ↔ Lầu 1 ↔ Lầu 2)', tooltipBg: '#e0f2fe', desc: 'Cầu thang kết nối 3 tầng của Dãy Học Trái.' },
+
+      { id: 'ptn_hoa', name: 'PTN Hoá học', floor: 'LAU2', category: 'PHONGTN', x: 1202, y: 806, w: 62, h: 144, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🧪', tooltipText: 'Phòng Thí nghiệm Hoá học (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Hoá học.' },
+      { id: 'ptn_sinh', name: 'PTN Sinh học', floor: 'LAU2', category: 'PHONGTN', x: 1202, y: 950, w: 62, h: 144, color: '#4dd0e1', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🧬', tooltipText: 'Phòng Thí nghiệm Sinh học (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Sinh học.' },
+      { id: 'ptn_ly', name: 'PTN Vật lý', floor: 'LAU2', category: 'PHONGTN', x: 1202, y: 1094, w: 62, h: 144, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🔭', tooltipText: 'Phòng Thí nghiệm Vật lý (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng thí nghiệm và thực hành bộ môn Vật lý.' },
+
+      { id: 'pbm_l1_1', name: 'Phòng BM', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 806, w: 62, h: 72, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📘', tooltipText: 'Phòng Bộ Môn 1 (Lầu 1)', tooltipBg: '#fef9c3', desc: 'Phòng sinh hoạt chuyên môn các tổ bộ môn.' },
+      { id: 'pbm_l1_2', name: 'Phòng BM', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 878, w: 62, h: 72, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📙', tooltipText: 'Phòng Bộ Môn 2 (Lầu 1)', tooltipBg: '#ffedd5', desc: 'Phòng sinh hoạt chuyên môn các tổ bộ môn.' },
+      { id: 'phong_steam', name: 'Phòng STEAM', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 950, w: 62, h: 92, color: '#f8dc52', textColor: '#0f172a', fontSize: 12, angle: 90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '🤖', tooltipText: 'Phòng STEAM & Nghiên cứu KHKT', tooltipBg: '#fef9c3', desc: 'Phòng thực hành STEAM, chế tạo Robot và nghiên cứu Khoa học Kỹ thuật.' },
+      { id: 'kho_clb', name: 'Kho CLB', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 1042, w: 62, h: 52, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📦', tooltipText: 'Kho CLB học sinh', tooltipBg: '#ffedd5', desc: 'Kho lưu trữ vật dụng và đạo cụ của các CLB.' },
+      { id: 'phong_cong_nghe', name: 'Phòng Công Nghệ', floor: 'LAU1', category: 'PHONGTN', x: 1264, y: 1094, w: 62, h: 92, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '⚙️', tooltipText: 'Phòng thực hành Công Nghệ', tooltipBg: '#fef9c3', desc: 'Phòng học và thực hành môn Công nghệ.' },
+      { id: 'phong_khach', name: 'Phòng Khách', floor: 'LAU1', category: 'HANHCHINH', x: 1264, y: 1186, w: 62, h: 52, color: '#f5b553', textColor: '#0f172a', fontSize: 10, angle: 0, shape: 'rect', tags: ['tag_letan'], tooltipEmoji: '🍵', tooltipText: 'Phòng đón khách', tooltipBg: '#ffedd5', desc: 'Phòng tiếp đón khách mời và đoàn công tác.' },
+
+      { id: 'phong_may_1', name: 'Phòng máy 1', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 806, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: ['tag_game'], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 1 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 1.' },
+      { id: 'phong_may_2', name: 'Phòng máy 2', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 902, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 2 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 2.' },
+      { id: 'phong_may_3', name: 'Phòng máy 3', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 998, w: 64, h: 96, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🖥️', tooltipText: 'Phòng Máy tính 3 (Trệt)', tooltipBg: '#ffedd5', desc: 'Phòng thực hành Tin học 3.' },
+      { id: 'pbm_tret_1', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 1094, w: 64, h: 72, color: '#f8dc52', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📘', tooltipText: 'Phòng Bộ Môn (Trệt 1)', tooltipBg: '#fef9c3', desc: 'Phòng bộ môn tầng trệt.' },
+      { id: 'pbm_tret_2', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 1326, y: 1166, w: 64, h: 72, color: '#f5b553', textColor: '#0f172a', fontSize: 11, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '📙', tooltipText: 'Phòng Bộ Môn (Trệt 2)', tooltipBg: '#ffedd5', desc: 'Phòng bộ môn tầng trệt.' },
+
+      { id: 'stair_east', name: 'Cầu thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 1202, y: 1238, w: 188, h: 44, color: '#38b6ff', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Dãy Thực Hành Phải', tooltipBg: '#e0f2fe', desc: 'Cầu thang kết nối 3 tầng Dãy Thực Hành & Bộ Môn.' },
+
+      { id: 'stair_mid_left', name: 'Cầu thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 560, y: 720, w: 252, h: 32, color: '#38b6ff', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Giữa (Trái)', tooltipBg: '#e0f2fe', desc: 'Cầu thang chính bên trái Sảnh Chào Cờ.' },
+      { id: 'stair_mid_right', name: 'Cầu thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 908, y: 720, w: 140, h: 32, color: '#38b6ff', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Giữa (Phải)', tooltipBg: '#e0f2fe', desc: 'Cầu thang chính bên phải Sảnh Chào Cờ.' },
+      { id: 'sanh_chao_co', name: 'Sảnh Chào Cờ', floor: 'TRET', category: 'HANHCHINH', x: 812, y: 616, w: 96, h: 136, color: '#f8dc52', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: ['tag_checkin'], tooltipEmoji: '🏛️', tooltipText: 'Sảnh Chào Cờ chính diện Cột cờ', tooltipBg: '#fef9c3', desc: 'Sảnh lễ đài Chào cờ nằm chính giữa mặt trước Dãy Chính Giữa.' },
+
+      { id: 'wc_3_1', name: 'WC 3.1', floor: 'LAU2', category: 'WC', x: 330, y: 492, w: 62, h: 204, color: '#8c52ff', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC 3.1 (Lầu 2 Trái)', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh học sinh Lầu 2 cánh trái.' },
+      { id: 'wc_2_1', name: 'WC 2.1', floor: 'LAU1', category: 'WC', x: 392, y: 492, w: 62, h: 204, color: '#e298ff', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC 2.1 (Lầu 1 Trái)', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh học sinh Lầu 1 cánh trái.' },
+      { id: 'wc_1_1', name: 'WC 1.1', floor: 'TRET', category: 'WC', x: 454, y: 492, w: 64, h: 204, color: '#8c52ff', textColor: '#0f172a', fontSize: 14, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC 1.1 (Trệt Trái)', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh học sinh Tầng Trệt cánh trái.' },
+
+      { id: 'wc_1_2', name: 'WC 1.2', floor: 'TRET', category: 'WC', x: 1202, y: 492, w: 62, h: 214, color: '#8c52ff', textColor: '#0f172a', fontSize: 14, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC 1.2 (Trệt Phải)', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh học sinh Tầng Trệt cánh phải.' },
+      { id: 'wc_2_2', name: 'WC 2.2', floor: 'LAU1', category: 'WC', x: 1264, y: 492, w: 62, h: 214, color: '#e298ff', textColor: '#0f172a', fontSize: 14, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC 2.2 (Lầu 1 Phải)', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh học sinh Lầu 1 cánh phải.' },
+      { id: 'wc_3_2', name: 'WC 3.2', floor: 'LAU2', category: 'WC', x: 1326, y: 492, w: 64, h: 214, color: '#8c52ff', textColor: '#0f172a', fontSize: 14, angle: 90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC 3.2 (Lầu 2 Phải)', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh học sinh Lầu 2 cánh phải.' },
+
+      { id: 'r_10l', name: '10L', floor: 'TRET', category: 'LOPHOC', x: 560, y: 616, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: ['tag_checkin', 'tag_game'], tooltipEmoji: '⚡', tooltipText: 'Lớp 10 Chuyên Lý (10L) — Trụ sở dự án KHKT', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Vật Lý (10L) tại tầng Trệt Dãy Chính Giữa.' },
+      { id: 'r_10h', name: '10H', floor: 'TRET', category: 'LOPHOC', x: 644, y: 616, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🧪', tooltipText: 'Lớp 10 Chuyên Hoá (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Hoá học.' },
+      { id: 'r_10sv', name: '10SV', floor: 'TRET', category: 'LOPHOC', x: 728, y: 616, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🌱', tooltipText: 'Lớp 10 Chuyên Sinh (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Sinh học.' },
+      { id: 'r_10s', name: '10S', floor: 'TRET', category: 'LOPHOC', x: 908, y: 616, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📜', tooltipText: 'Lớp 10 Chuyên Sử (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Lịch sử.' },
+      { id: 'r_10d', name: '10Đ', floor: 'TRET', category: 'LOPHOC', x: 992, y: 616, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🌍', tooltipText: 'Lớp 10 Chuyên Địa (Trệt)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Địa lý.' },
+      { id: 'phong_y_te', name: 'Phòng Y Tế', floor: 'TRET', category: 'HANHCHINH', x: 1076, y: 616, w: 84, h: 62, color: '#f5b553', textColor: '#0f172a', fontSize: 12, angle: 0, shape: 'rect', tags: ['tag_letan'], tooltipEmoji: '🏥', tooltipText: 'Phòng Y Tế & Chăm sóc sức khỏe', tooltipBg: '#ffedd5', desc: 'Phòng Y tế học đường, trực sơ cấp cứu trong mọi sự kiện.' },
+
+      { id: 'r_11h', name: '11H', floor: 'LAU1', category: 'LOPHOC', x: 560, y: 554, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🧪', tooltipText: 'Lớp 11 Chuyên Hoá (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Hoá học.' },
+      { id: 'r_11sv', name: '11SV', floor: 'LAU1', category: 'LOPHOC', x: 644, y: 554, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🌱', tooltipText: 'Lớp 11 Chuyên Sinh (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Sinh học.' },
+      { id: 'r_11t1', name: '11T1', floor: 'LAU1', category: 'LOPHOC', x: 728, y: 554, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📐', tooltipText: 'Lớp 11 Chuyên Toán 1 (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Toán 1.' },
+      { id: 'r_11t2', name: '11T2', floor: 'LAU1', category: 'LOPHOC', x: 812, y: 554, w: 96, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📐', tooltipText: 'Lớp 11 Chuyên Toán 2 (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Toán 2.' },
+      { id: 'r_11s', name: '11S', floor: 'LAU1', category: 'LOPHOC', x: 908, y: 554, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📜', tooltipText: 'Lớp 11 Chuyên Sử (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Lịch sử.' },
+      { id: 'r_11d', name: '11Đ', floor: 'LAU1', category: 'LOPHOC', x: 992, y: 554, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🌍', tooltipText: 'Lớp 11 Chuyên Địa (Lầu 1)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 11 Chuyên Địa lý.' },
+      { id: 'ktx_mid_l1', name: 'KTX', floor: 'LAU1', category: 'NGOAIVI', x: 1076, y: 554, w: 84, h: 62, color: '#f8dc52', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'Khu nội trú Lầu 1', tooltipBg: '#fef9c3', desc: 'Phòng nội trú học sinh Lầu 1.' },
+
+      { id: 'r_12h', name: '12H', floor: 'LAU2', category: 'LOPHOC', x: 560, y: 492, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🧪', tooltipText: 'Lớp 12 Chuyên Hoá (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Hoá học.' },
+      { id: 'r_12sv', name: '12SV', floor: 'LAU2', category: 'LOPHOC', x: 644, y: 492, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🌱', tooltipText: 'Lớp 12 Chuyên Sinh (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Sinh học.' },
+      { id: 'r_12t1', name: '12T1', floor: 'LAU2', category: 'LOPHOC', x: 728, y: 492, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📐', tooltipText: 'Lớp 12 Chuyên Toán 1 (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Toán 1.' },
+      { id: 'r_12t2', name: '12T2', floor: 'LAU2', category: 'LOPHOC', x: 812, y: 492, w: 96, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📐', tooltipText: 'Lớp 12 Chuyên Toán 2 (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Toán 2.' },
+      { id: 'r_12s', name: '12S', floor: 'LAU2', category: 'LOPHOC', x: 908, y: 492, w: 84, h: 62, color: '#17b8de', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📜', tooltipText: 'Lớp 12 Chuyên Sử (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Lịch sử.' },
+      { id: 'r_12d', name: '12Đ', floor: 'LAU2', category: 'LOPHOC', x: 992, y: 492, w: 84, h: 62, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🌍', tooltipText: 'Lớp 12 Chuyên Địa (Lầu 2)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 12 Chuyên Địa lý.' },
+      { id: 'ktx_mid_l2', name: 'KTX', floor: 'LAU2', category: 'NGOAIVI', x: 1076, y: 492, w: 84, h: 62, color: '#f5b553', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'Khu nội trú Lầu 2', tooltipBg: '#ffedd5', desc: 'Phòng nội trú học sinh Lầu 2.' },
+
+      { id: 'r_10t1', name: '10T1', floor: 'TRET', category: 'LOPHOC', x: 816, y: 300, w: 88, h: 60, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📐', tooltipText: 'Lớp 10 Chuyên Toán 1 (Trệt Bắc)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Toán 1.' },
+      { id: 'r_10t2', name: '10T2', floor: 'TRET', category: 'LOPHOC', x: 904, y: 300, w: 88, h: 60, color: '#4dd0e1', textColor: '#0f172a', fontSize: 14, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📐', tooltipText: 'Lớp 10 Chuyên Toán 2 (Trệt Bắc)', tooltipBg: '#cffafe', desc: 'Phòng học lớp 10 Chuyên Toán 2.' },
+      { id: 'pbm_bac', name: 'Phòng BM', floor: 'TRET', category: 'PHONGTN', x: 992, y: 300, w: 96, h: 60, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '📚', tooltipText: 'Phòng Bộ Môn Khu Bắc', tooltipBg: '#cffafe', desc: 'Phòng Bộ môn dãy phía Bắc.' },
+
+      { id: 'ktx_b_11', name: 'KTX', floor: 'LAU1', category: 'NGOAIVI', x: 816, y: 240, w: 88, h: 60, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'KTX Phía Bắc (Lầu 1 - P1)', tooltipBg: '#cffafe', desc: 'Phòng KTX phía Bắc Lầu 1.' },
+      { id: 'ktx_b_12', name: 'KTX', floor: 'LAU1', category: 'NGOAIVI', x: 904, y: 240, w: 88, h: 60, color: '#4dd0e1', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'KTX Phía Bắc (Lầu 1 - P2)', tooltipBg: '#cffafe', desc: 'Phòng KTX phía Bắc Lầu 1.' },
+      { id: 'ktx_b_13', name: 'KTX', floor: 'LAU1', category: 'NGOAIVI', x: 992, y: 240, w: 96, h: 60, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'KTX Phía Bắc (Lầu 1 - P3)', tooltipBg: '#cffafe', desc: 'Phòng KTX phía Bắc Lầu 1.' },
+
+      { id: 'ktx_b_21', name: 'KTX', floor: 'LAU2', category: 'NGOAIVI', x: 816, y: 180, w: 88, h: 60, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'KTX Phía Bắc (Lầu 2 - P1)', tooltipBg: '#cffafe', desc: 'Phòng KTX phía Bắc Lầu 2.' },
+      { id: 'ktx_b_22', name: 'KTX', floor: 'LAU2', category: 'NGOAIVI', x: 904, y: 180, w: 88, h: 60, color: '#4dd0e1', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'KTX Phía Bắc (Lầu 2 - P2)', tooltipBg: '#cffafe', desc: 'Phòng KTX phía Bắc Lầu 2.' },
+      { id: 'ktx_b_23', name: 'KTX', floor: 'LAU2', category: 'NGOAIVI', x: 992, y: 180, w: 96, h: 60, color: '#17b8de', textColor: '#0f172a', fontSize: 13, angle: 0, shape: 'rect', tags: [], tooltipEmoji: '🛏️', tooltipText: 'KTX Phía Bắc (Lầu 2 - P3)', tooltipBg: '#cffafe', desc: 'Phòng KTX phía Bắc Lầu 2.' },
+
+      { id: 'stair_north', name: 'Cầu Thang', floor: 'ALL', category: 'NGOAIVI', isStair: true, x: 1088, y: 180, w: 68, h: 180, color: '#38b6ff', textColor: '#0f172a', fontSize: 15, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🪜', tooltipText: 'Cầu thang Khu KTX Phía Bắc', tooltipBg: '#e0f2fe', desc: 'Cầu thang kết nối 3 tầng Khu KTX & Lớp học phía Bắc.' },
+      { id: 'wc_ktx_3', name: 'WC KTX', floor: 'LAU2', category: 'WC', x: 1156, y: 180, w: 46, h: 60, color: '#e298ff', textColor: '#0f172a', fontSize: 10, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC KTX Lầu 2', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh KTX Lầu 2.' },
+      { id: 'wc_ktx_2', name: 'WC KTX', floor: 'LAU1', category: 'WC', x: 1156, y: 240, w: 46, h: 60, color: '#8c52ff', textColor: '#ffffff', fontSize: 10, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC KTX Lầu 1', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh KTX Lầu 1.' },
+      { id: 'wc_ktx_1', name: 'WC KTX', floor: 'TRET', category: 'WC', x: 1156, y: 300, w: 46, h: 60, color: '#e298ff', textColor: '#0f172a', fontSize: 10, angle: -90, shape: 'rect', tags: [], tooltipEmoji: '🚻', tooltipText: 'WC KTX Trệt', tooltipBg: '#f3e8ff', desc: 'Nhà vệ sinh KTX Tầng Trệt.' },
+
+      {
+        id: 'san_bong_da', name: 'Sân bóng đá', floor: 'TRET', category: 'NGOAIVI',
+        x: 340, y: 58, w: 450, h: 96, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 22, angle: 0, shape: 'rect', tags: ['tag_game'],
+        tooltipEmoji: '⚽', tooltipText: 'Sân bóng đá & Khu thể thao ngoài trời phía Bắc', tooltipBg: '#e0f2fe',
+        desc: 'Sân bóng đá tự nhiên nằm ở phía Bắc khuôn viên trường.'
+      },
+      {
+        id: 'vuon_rau', name: 'Vườn rau hữu cơ', floor: 'TRET', category: 'NGOAIVI',
+        x: 365, y: 210, w: 395, h: 215, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 24, angle: 0, shape: 'rect', tags: ['tag_checkin'],
+        tooltipEmoji: '🥬', tooltipText: 'Vườn rau hữu cơ & Khu thực nghiệm Sinh học', tooltipBg: '#dcfce7',
+        desc: 'Khu vườn rau hữu cơ và thực nghiệm sinh học của học sinh.'
+      },
+      {
+        id: 'nha_xe_hs', name: 'Nhà xe học sinh', floor: 'TRET', category: 'NGOAIVI',
+        x: 110, y: 410, w: 108, h: 650, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 22, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🚲', tooltipText: 'Nhà xe học sinh (Trục đường nội bộ phía Tây)', tooltipBg: '#e0f2fe',
+        desc: 'Khu vực nhà xe học sinh chạy dọc đường nội bộ phía Tây.'
+      },
+      {
+        id: 'nha_thi_dau', name: 'Nhà thi đấu', floor: 'TRET', category: 'NGOAIVI',
+        x: 1290, y: 95, w: 195, h: 260, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 24, angle: 90, shape: 'rect', tags: ['tag_game'],
+        tooltipEmoji: '🏸', tooltipText: 'Nhà thi đấu đa năng & Sân CLB Đá cầu NQD', tooltipBg: '#e0f2fe',
+        desc: 'Nhà thi đấu đa năng phục vụ học thể dục, thi đấu cầu lông, đá cầu và sự kiện thể thao.'
+      },
+      {
+        id: 'can_tin', name: 'Căn tin', floor: 'TRET', category: 'NGOAIVI',
+        x: 1435, y: 465, w: 135, h: 245, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 24, angle: 90, shape: 'rect', tags: ['tag_food'],
+        tooltipEmoji: '🍜', tooltipText: 'Căn tin nhà trường — Khu ẩm thực sự kiện', tooltipBg: '#ffedd5',
+        desc: 'Căn tin trường phục vụ ăn uống và giải khát.'
+      },
+      {
+        id: 'ktx_lon_moi', name: 'Khu Ký Túc Xá Lớn', floor: 'TRET', category: 'NGOAIVI',
+        x: 1605, y: 445, w: 175, h: 275, color: '#f5b553', textColor: '#0f172a',
+        fontSize: 20, angle: 90, shape: 'rect', tags: [],
+        tooltipEmoji: '🏢', tooltipText: 'Khối Ký Túc Xá Lớn (Nằm phía sau Căn tin — To gần bằng Nhà thi đấu)', tooltipBg: '#fef3c7',
+        desc: 'Khối Ký Túc Xá Lớn nằm phía sau Căn tin, đối chiếu đúng cụm nhà nội trú mái ngói cam phía Đông trên ảnh vệ tinh.'
+      },
+      {
+        id: 'hoi_truong_lon', name: 'Hội trường lớn', floor: 'TRET', category: 'NGOAIVI',
+        x: 1445, y: 785, w: 190, h: 485, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 22, angle: 90, shape: 'trapezoid',
+        polygon: '0 5, 100 0, 100 100, 0 95',
+        tags: ['tag_letan', 'tag_checkin'],
+        tooltipEmoji: '🎭', tooltipText: 'Hội trường lớn (Khối hình thang — Hỗ trợ sơ đồ nội thất)', tooltipBg: '#e0f2fe',
+        desc: 'Hội trường lớn tổ chức lễ khai mạc, văn nghệ và không gian gian hàng trong nhà.',
+        interiorPublic: false,
+        subBooths: [
+          { id: 'sb_stage', name: 'Sân khấu chính', rx: 10, ry: 6, rw: 80, rh: 18, color: '#f43f5e' },
+          { id: 'sb_nqdev', name: 'Quầy NQD Events', rx: 10, ry: 32, rw: 36, rh: 24, color: '#f59e0b' },
+          { id: 'sb_esc', name: 'Quầy ESC', rx: 54, ry: 32, rw: 36, rh: 24, color: '#10b981' },
+          { id: 'sb_dance', name: 'Quầy Dance Crew', rx: 10, ry: 64, rw: 36, rh: 24, color: '#8b5cf6' },
+          { id: 'sb_stem', name: 'Quầy STEM Lab', rx: 54, ry: 64, rw: 36, rh: 24, color: '#06b6d4' }
+        ]
+      },
+      {
+        id: 'nha_xe_gv', name: 'Nhà xe giáo viên', floor: 'HANHCHINH', category: 'NGOAIVI',
+        x: 1320, y: 1475, w: 235, h: 68, color: '#29a9f8', textColor: '#0f172a',
+        fontSize: 16, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🛵', tooltipText: 'Nhà xe Giáo viên & Khách', tooltipBg: '#e0f2fe',
+        desc: 'Khu vực nhà xe dành cho Giáo viên và khách đến liên hệ công tác.'
+      },
+
+      {
+        id: 'tree_sw_rotunda', name: '🌳 Cây xanh Góc Thư viện', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 576, y: 1135, w: 86, h: 86, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: 0, shape: 'circle', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Cụm cây cổ thụ góc Tây-Nam sân trường (cạnh Thư viện)', tooltipBg: '#dcfce7',
+        desc: 'Cụm cây xanh bóng mát tại góc Tây-Nam sân trường chính.'
+      },
+      {
+        id: 'tree_west_row1', name: '🌳 Hàng cây Dãy Trái 1', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 574, y: 830, w: 58, h: 125, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🌲', tooltipText: 'Dải cây xanh dọc hành lang Dãy Học Trái', tooltipBg: '#dcfce7',
+        desc: 'Hàng cây xanh rợp bóng dọc theo hành lang Dãy Học Trái.'
+      },
+      {
+        id: 'tree_west_row2', name: '🌳 Hàng cây Dãy Trái 2', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 574, y: 985, w: 58, h: 125, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🌲', tooltipText: 'Dải cây xanh dọc hành lang Dãy Học Trái', tooltipBg: '#dcfce7',
+        desc: 'Hàng cây xanh rợp bóng dọc theo hành lang Dãy Học Trái.'
+      },
+      {
+        id: 'tree_nw_corner', name: '🌳 Cây xanh Tây-Bắc Sân', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 576, y: 760, w: 96, h: 55, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Thảm cây xanh trước Cầu thang Giữa Trái', tooltipBg: '#dcfce7',
+        desc: 'Cụm cây xanh góc Tây-Bắc sân trường.'
+      },
+      {
+        id: 'tree_ne_corner', name: '🌳 Cây xanh Đông-Bắc Sân', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 1048, y: 760, w: 96, h: 55, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Thảm cây xanh góc Đông-Bắc sân trường', tooltipBg: '#dcfce7',
+        desc: 'Cụm cây xanh góc Đông-Bắc sân trường.'
+      },
+      {
+        id: 'tree_east_row1', name: '🌳 Hàng cây Dãy Phải 1', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 1088, y: 830, w: 58, h: 125, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: 90, shape: 'rect', tags: [],
+        tooltipEmoji: '🌲', tooltipText: 'Dải cây xanh dọc hành lang Dãy Thực Hành', tooltipBg: '#dcfce7',
+        desc: 'Hàng cây xanh dọc hành lang Dãy Thực Hành & Bộ Môn.'
+      },
+      {
+        id: 'tree_east_row2', name: '🌳 Hàng cây Dãy Phải 2', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 1088, y: 985, w: 58, h: 125, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: 90, shape: 'rect', tags: [],
+        tooltipEmoji: '🌲', tooltipText: 'Dải cây xanh dọc hành lang Dãy Thực Hành', tooltipBg: '#dcfce7',
+        desc: 'Hàng cây xanh dọc hành lang Dãy Thực Hành & Bộ Môn.'
+      },
+      {
+        id: 'tree_se_corner', name: '🌳 Cây xanh Đông-Nam Sân', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 1058, y: 1135, w: 86, h: 86, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 11, angle: 0, shape: 'circle', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Cụm cây xanh góc Đông-Nam sân trường', tooltipBg: '#dcfce7',
+        desc: 'Cụm cây xanh góc Đông-Nam sân trường.'
+      },
+      {
+        id: 'tree_ktx_courtyard', name: '🌿 Bồn cây Sân KTX Bắc', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 1005, y: 396, w: 64, h: 64, color: '#86efac', textColor: '#14532d',
+        fontSize: 10, angle: 0, shape: 'circle', tags: [],
+        tooltipEmoji: '🌿', tooltipText: 'Bồn cây tròn chính giữa sân trong Khu KTX Bắc (Chuẩn ảnh vệ tinh)', tooltipBg: '#dcfce7',
+        desc: 'Bồn cây cảnh hình tròn nằm giữa sân trong Khu KTX & Lớp học phía Bắc.'
+      },
+      {
+        id: 'tree_front_west', name: '🌳 Thảm cây Cổng Trái', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 520, y: 1450, w: 250, h: 56, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 12, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Hàng cây xanh mặt tiền bên trái Tượng Cụ', tooltipBg: '#dcfce7',
+        desc: 'Dải cây xanh cảnh quan phía trước Khu Hành chính (bên trái Tượng Cụ).'
+      },
+      {
+        id: 'tree_front_east', name: '🌳 Thảm cây Cổng Phải', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 950, y: 1450, w: 250, h: 56, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 12, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Hàng cây xanh mặt tiền bên phải Tượng Cụ', tooltipBg: '#dcfce7',
+        desc: 'Dải cây xanh cảnh quan phía trước Khu Hành chính (bên phải Tượng Cụ).'
+      },
+      {
+        id: 'tree_west_avenue', name: '🌲 Hàng cây Đường Nội Bộ Tây', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 245, y: 520, w: 56, h: 480, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 12, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🌲', tooltipText: 'Hàng cây xanh ngăn giữa Nhà xe học sinh và Dãy Học Trái', tooltipBg: '#dcfce7',
+        desc: 'Dải cây xanh chạy dọc trục đường nội bộ phía Tây trường.'
+      },
+      {
+        id: 'tree_garden_west', name: '🌳 Vườn cây Tây-Bắc', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 245, y: 210, w: 95, h: 215, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 12, angle: -90, shape: 'rect', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Mảng cây xanh cạnh Vườn rau hữu cơ', tooltipBg: '#dcfce7',
+        desc: 'Khu cây xanh tự nhiên phía Tây Vườn rau hữu cơ.'
+      },
+      {
+        id: 'tree_auditorium_south', name: '🌳 Cây xanh Hội trường lớn', floor: 'TRET', category: 'NGOAIVI', isTree: true,
+        x: 1445, y: 1300, w: 180, h: 70, color: '#bbf7d0', textColor: '#14532d',
+        fontSize: 12, angle: 0, shape: 'rect', tags: [],
+        tooltipEmoji: '🌳', tooltipText: 'Cụm cây xanh phía Nam Hội trường lớn', tooltipBg: '#dcfce7',
+        desc: 'Thảm cây xanh trước sảnh Hội trường lớn.'
+      }
+    ];
+  }
+
+  const MapState = {
+    worldWidth: 1850,
+    worldHeight: 1700,
+    mapBg: '#f8fafc',
+    zoom: 0.55,
+    panX: 80,
+    panY: 15,
+    activeFloor: 'ALL',
+    activeCategory: 'ALL',
+    activeTagId: null,
+    searchQuery: '',
+    selectedRoomId: 'r_10l',
+    multiSelectedIds: ['r_10l'],
+    pointA: null,
+    pointB: null,
+    activeStairId: null,
+    adminRole: 'NONE',
+    snapToGrid: true,
+    vertexEditMode: false,
+    headerConfig: {
+      eventActive: false,
+      eventTitle: 'THPT Chuyên Nguyễn Quang Diêu',
+      eventDate: '26/03/2027',
+      fontName: 'Times New Roman',
+      fontLink: '',
+      logos: [
+        { id: 'lg_1', short: 'NQD', name: 'THPT Chuyên NQD', img: '' },
+        { id: 'lg_2', short: 'EV', name: 'NQD Events', img: '' },
+        { id: 'lg_3', short: 'ESC', name: 'English Speaking Club', img: '' }
+      ]
+    },
+    eventTags: JSON.parse(JSON.stringify(DEFAULT_EVENT_TAGS)),
+    sponsors: JSON.parse(JSON.stringify(DEFAULT_SPONSORS)),
+    seasonalEffect: {
+      type: 'none',
+      customToken: '✨',
+      count: 45,
+      speed: 1.4,
+      injectedCode: ''
+    },
+    activeSheetId: 'sheet_origin',
+    publicSheetId: 'sheet_origin',
+    sheets: [
+      {
+        id: 'sheet_origin',
+        name: '🔒 Map Gốc',
+        lockedOrigin: true,
+        rooms: createMasterRooms(),
+        fixedLines: []
+      }
+    ]
+  };
+
+  function loadStorage() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
+          Object.assign(MapState, parsed);
+          MapState.adminRole = 'NONE';
+        }
+      }
+    } catch (e) {}
+  }
+
+  function saveStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(MapState));
+    } catch (e) {}
+  }
+
+  function getActiveSheet() {
+    const id = MapState.adminRole === 'NONE' ? MapState.publicSheetId : MapState.activeSheetId;
+    return MapState.sheets.find(s => s.id === id) || MapState.sheets[0];
+  }
+
+  function parsePolygonPoints(polyStr) {
+    if (!polyStr || !polyStr.trim()) {
+      return [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 88, y: 100 }, { x: 12, y: 100 }];
+    }
+    return polyStr.split(',').map(pair => {
+      const parts = pair.trim().split(/\s+/);
+      return {
+        x: Math.max(0, Math.min(100, parseFloat(parts[0]) || 0)),
+        y: Math.max(0, Math.min(100, parseFloat(parts[1]) || 0))
+      };
+    });
+  }
+
+  function getRoomShapeStyle(room) {
+    const sh = room.shape || 'rect';
+    if (sh === 'circle') return { borderRadius: '9999px', clipPath: 'none' };
+    if (sh === 'octagon') {
+      return {
+        borderRadius: '0px',
+        clipPath: 'polygon(26% 0%, 74% 0%, 100% 26%, 100% 74%, 74% 100%, 26% 100%, 0% 74%, 0% 26%)'
+      };
+    }
+    if (sh === 'trapezoid') {
+      const pts = parsePolygonPoints(room.polygon || '0 6, 100 0, 100 100, 0 94');
+      return {
+        borderRadius: '0px',
+        clipPath: 'polygon(' + pts.map(p => `${p.x}% ${p.y}%`).join(', ') + ')'
+      };
+    }
+    if (sh === 'lshape') {
+      return {
+        borderRadius: '0px',
+        clipPath: 'polygon(0% 0%, 60% 0%, 60% 45%, 100% 45%, 100% 100%, 0% 100%)'
+      };
+    }
+    if (sh === 'custom' && room.polygon) {
+      const pts = parsePolygonPoints(room.polygon);
+      return {
+        borderRadius: '0px',
+        clipPath: 'polygon(' + pts.map(p => `${p.x}% ${p.y}%`).join(', ') + ')'
+      };
+    }
+    return { borderRadius: '5px', clipPath: 'none' };
+  }
+
+  function isRoomMatchingFilters(room) {
+    if (room.locked) return true;
+    if (MapState.searchQuery.trim() !== '') {
+      const q = MapState.searchQuery.trim().toLowerCase();
+      const inName = (room.name || '').toLowerCase().includes(q);
+      const inDesc = (room.desc || '').toLowerCase().includes(q);
+      if (!inName && !inDesc) return false;
+    }
+    if (MapState.activeFloor !== 'ALL') {
+      if (room.floor !== 'ALL' && room.floor !== MapState.activeFloor) return false;
+    }
+    if (MapState.activeCategory !== 'ALL') {
+      if (room.category !== MapState.activeCategory) return false;
+    }
+    if (MapState.activeTagId) {
+      if (!Array.isArray(room.tags) || !room.tags.includes(MapState.activeTagId)) return false;
+    }
+    return true;
+  }
+
+  function renderMap() {
+    renderHeader();
+    renderFilterPills();
+    renderRooms();
+    renderBottomActionBar();
+    applyViewportTransform();
+    if (window.NQDRouting && typeof window.NQDRouting.render === 'function') {
+      window.NQDRouting.render();
+    }
+    if (window.NQDStreetView && typeof window.NQDStreetView.renderMapPins === 'function') {
+      window.NQDStreetView.renderMapPins();
+    }
+  }
+
+  function renderHeader() {
+    document.documentElement.style.setProperty('--map-bg', MapState.mapBg);
+    const vp = document.getElementById('map-viewport');
+    if (vp) vp.style.backgroundColor = MapState.mapBg;
+    const bgInput = document.getElementById('input-map-bg');
+    if (bgInput) bgInput.value = MapState.mapBg;
+
+    const hc = MapState.headerConfig;
+    const titleEl = document.getElementById('header-title');
+    const dateEl = document.getElementById('header-event-date');
+    const logosEl = document.getElementById('header-logos-strip');
+
+    if (hc.fontLink && !document.querySelector(`link[href="${hc.fontLink}"]`)) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = hc.fontLink;
+      document.head.appendChild(link);
+    }
+
+    if (titleEl) {
+      titleEl.textContent = hc.eventActive
+        ? (hc.eventTitle || 'THPT Chuyên Nguyễn Quang Diêu')
+        : 'THPT Chuyên Nguyễn Quang Diêu';
+      titleEl.style.fontFamily = (hc.eventActive && hc.fontName)
+        ? `'${hc.fontName}', 'Times New Roman', Times, serif`
+        : `'Times New Roman', Times, serif`;
+    }
+
+    if (dateEl) {
+      if (hc.eventActive && hc.eventDate) {
+        dateEl.textContent = `📅 Ngày diễn ra: ${hc.eventDate}`;
+        dateEl.classList.remove('hidden');
+      } else {
+        dateEl.classList.add('hidden');
+      }
+    }
+
+    if (logosEl) {
+      logosEl.innerHTML = '';
+      const list = hc.eventActive ? (hc.logos || []) : [hc.logos[0] || { short: 'NQD', name: 'THPT Chuyên NQD' }];
+      list.forEach(lg => {
+        const badge = document.createElement('div');
+        badge.className = 'w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 p-0.5 shadow flex items-center justify-center shrink-0';
+        badge.title = lg.name || lg.short;
+        if (lg.img) {
+          badge.innerHTML = `<img src="${lg.img}" alt="${lg.short}" class="w-full h-full rounded-full object-cover bg-slate-950" />`;
+        } else {
+          badge.innerHTML = `<div class="w-full h-full rounded-full bg-slate-950 text-amber-400 font-bold text-[11px] flex items-center justify-center tracking-tighter">${lg.short || 'NQD'}</div>`;
+        }
+        logosEl.appendChild(badge);
+      });
+    }
+  }
+
+  function renderFilterPills() {
+    document.querySelectorAll('.pill-floor-btn').forEach(btn => {
+      const active = btn.dataset.floor === MapState.activeFloor;
+      btn.className = `pill-floor-btn px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap shrink-0 ${
+        active
+          ? 'bg-sky-500 text-white shadow-sm'
+          : 'bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/80'
+      }`;
+    });
+
+    document.querySelectorAll('.pill-cat-btn').forEach(btn => {
+      const active = btn.dataset.cat === MapState.activeCategory;
+      btn.className = `pill-cat-btn px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap shrink-0 ${
+        active
+          ? 'bg-emerald-500 text-slate-950 shadow-sm'
+          : 'bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/80'
+      }`;
+    });
+
+    const tagGroup = document.getElementById('dynamic-tag-pills');
+    if (!tagGroup) return;
+    tagGroup.innerHTML = '';
+    MapState.eventTags.forEach(tag => {
+      const active = MapState.activeTagId === tag.id;
+      const btn = document.createElement('button');
+      btn.className = `px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap shrink-0 flex items-center gap-1 ${
+        active
+          ? 'bg-amber-400 text-slate-950 shadow-sm'
+          : 'bg-slate-800/90 hover:bg-slate-700 text-amber-200 border border-amber-500/30'
+      }`;
+      btn.innerHTML = `<span>${tag.icon}</span><span>${tag.label}</span>`;
+      btn.addEventListener('click', () => {
+        MapState.activeTagId = MapState.activeTagId === tag.id ? null : tag.id;
+        renderRooms();
+        renderFilterPills();
+      });
+      tagGroup.appendChild(btn);
+    });
+  }
+
+  function renderRooms() {
+    const layer = document.getElementById('rooms-layer');
+    if (!layer) return;
+    layer.innerHTML = '';
+
+    const sheet = getActiveSheet();
+    const litRouteIds = new Set();
+    if (MapState.pointA) litRouteIds.add(MapState.pointA);
+    if (MapState.pointB) litRouteIds.add(MapState.pointB);
+    if (MapState.activeStairId) litRouteIds.add(MapState.activeStairId);
+
+    sheet.rooms.forEach(room => {
+      if (room.fontUrl && !document.querySelector(`link[href="${room.fontUrl}"]`)) {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = room.fontUrl;
+        document.head.appendChild(l);
+      }
+
+      const el = document.createElement('div');
+      el.dataset.roomId = room.id;
+      el.style.left = room.x + 'px';
+      el.style.top = room.y + 'px';
+      el.style.width = room.w + 'px';
+      el.style.height = room.h + 'px';
+      el.style.backgroundColor = room.color || '#4dd0e1';
+      el.style.color = room.textColor || '#0f172a';
+
+      const shapeStyle = getRoomShapeStyle(room);
+      el.style.borderRadius = shapeStyle.borderRadius;
+      el.style.clipPath = shapeStyle.clipPath;
+
+      const matched = isRoomMatchingFilters(room);
+      const isLit = litRouteIds.has(room.id);
+      const isSelected = MapState.selectedRoomId === room.id;
+      const isMulti = MapState.multiSelectedIds.includes(room.id);
+
+      let cls = 'room-block absolute flex items-center justify-center cursor-pointer transition-all duration-150 overflow-hidden ';
+      cls += room.isTree
+        ? 'border-2 border-dashed border-emerald-700/45 shadow-inner '
+        : 'border border-slate-900/25 shadow-sm ';
+
+      if (!matched && !isLit) cls += 'room-dimmed ';
+      if (isLit) cls += 'room-route-lit ';
+      if (isSelected) cls += 'room-selected ';
+      if (isMulti && MapState.multiSelectedIds.length > 1) cls += 'room-multi-selected ';
+      el.className = cls;
+
+      if (room.id === 'cot_co') {
+        el.innerHTML = `
+          <div class="flex flex-col items-center justify-center w-full h-full pointer-events-none">
+            <span class="flag-wave text-xl leading-none">🇻🇳</span>
+            <span class="text-[9px] font-bold text-white drop-shadow">Cột cờ</span>
+          </div>
+        `;
+      } else if (room.interiorPublic && Array.isArray(room.subBooths) && room.subBooths.length > 0) {
+        let html = `<div class="absolute inset-0 bg-slate-950/15 p-1">
+          <div class="text-[9px] font-bold text-center bg-white/85 text-slate-900 rounded px-1 truncate">${room.name}</div>`;
+        room.subBooths.forEach(sb => {
+          html += `
+            <div data-subbooth-id="${sb.id}"
+                 style="left:${sb.rx}%; top:${sb.ry}%; width:${sb.rw}%; height:${sb.rh}%; background:${sb.color || '#f59e0b'};"
+                 class="subbooth-item absolute rounded border border-white/80 text-white text-[9px] font-bold flex items-center justify-center text-center p-0.5 shadow hover:scale-105 transition">
+              <span class="truncate">${sb.name}</span>
+            </div>
+          `;
+        });
+        html += `</div>`;
+        el.innerHTML = html;
+      } else {
+        const desiredSize = parseInt(room.fontSize || 13, 10);
+        const angle = parseFloat(room.angle || 0);
+        const rad = (angle * Math.PI) / 180;
+        const absCos = Math.abs(Math.cos(rad));
+        const absSin = Math.abs(Math.sin(rad));
+        const effW = Math.max(18, room.w * absCos + room.h * absSin - 8);
+        const effH = Math.max(14, room.w * absSin + room.h * absCos - 6);
+        const textLen = Math.max(1, (room.name || '').length);
+        const maxByWidth = Math.max(7, Math.floor(effW / Math.max(2.8, textLen * 0.50)));
+        const maxByHeight = Math.max(7, Math.floor(effH * 0.72));
+        const safeFontSize = Math.min(desiredSize, maxByWidth, maxByHeight);
+
+        const label = document.createElement('div');
+        label.className = 'font-bold text-center leading-tight px-0.5 pointer-events-none select-none';
+        label.style.fontSize = safeFontSize + 'px';
+        label.style.fontFamily = room.fontFamily
+          ? `'${room.fontFamily}', 'Times New Roman', Times, serif`
+          : `'Times New Roman', Times, serif`;
+
+        if (room.verticalText) {
+          label.style.writingMode = 'vertical-rl';
+          label.style.textOrientation = 'upright';
+        } else {
+          label.style.transform = `rotate(${angle}deg)`;
+        }
+        label.style.maxWidth = effW + 'px';
+        label.style.maxHeight = effH + 'px';
+        label.style.overflow = 'hidden';
+        label.textContent = room.repairMode ? `🔧 ${room.name}` : room.name;
+        el.appendChild(label);
+
+        if (Array.isArray(room.tags) && room.tags.length > 0) {
+          const badgeWrap = document.createElement('div');
+          badgeWrap.className = 'absolute top-0.5 right-0.5 flex items-center gap-0.5 text-[10px] pointer-events-none';
+          room.tags.slice(0, 2).forEach(tid => {
+            const tagObj = MapState.eventTags.find(t => t.id === tid);
+            if (tagObj) {
+              const sp = document.createElement('span');
+              sp.textContent = tagObj.icon;
+              badgeWrap.appendChild(sp);
+            }
+          });
+          el.appendChild(badgeWrap);
+        }
+      }
+
+      bindRoomEvents(el, room);
+      layer.appendChild(el);
+    });
+
+    if (window.NQDAdmin && typeof window.NQDAdmin.renderVertexHandlesOnMap === 'function') {
+      window.NQDAdmin.renderVertexHandlesOnMap();
+    }
+  }
+
+  function isDesktopFinePointer() {
+    return window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches && window.innerWidth >= 768;
+  }
+
+  function hexToRgba(hex, alpha) {
+    let c = (hex || '#ffffff').replace('#', '');
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    const n = parseInt(c, 16) || 0xffffff;
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+
+  function bindRoomEvents(el, room) {
+    el.addEventListener('mouseenter', () => {
+      if (!isDesktopFinePointer()) return;
+      const tip = document.getElementById('pc-cute-tooltip');
+      if (!tip) return;
+      document.getElementById('tip-emoji').textContent = room.tooltipEmoji || '✨';
+      document.getElementById('tip-title').textContent = room.name;
+      document.getElementById('tip-floor').textContent = formatFloorName(room.floor);
+      document.getElementById('tip-note').textContent = room.repairMode
+        ? 'Đang cập nhật'
+        : (room.tooltipText || room.desc || 'Nhấn để xem thông tin chi tiết');
+      tip.style.backgroundColor = hexToRgba(room.tooltipBg || '#ffffff', 0.82);
+      tip.style.borderColor = hexToRgba(room.color || '#38bdf8', 0.65);
+      tip.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        tip.style.opacity = '1';
+      });
+    });
+
+    el.addEventListener('mousemove', (e) => {
+      if (!isDesktopFinePointer()) return;
+      const tip = document.getElementById('pc-cute-tooltip');
+      if (!tip) return;
+      tip.style.left = Math.min(window.innerWidth - 260, e.clientX + 16) + 'px';
+      tip.style.top = Math.max(12, e.clientY - 54) + 'px';
+    });
+
+    el.addEventListener('mouseleave', () => {
+      const tip = document.getElementById('pc-cute-tooltip');
+      if (!tip) return;
+      tip.style.opacity = '0';
+      tip.classList.add('hidden');
+    });
+
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+
+      if (e.shiftKey) {
+        if (MapState.multiSelectedIds.includes(room.id)) {
+          MapState.multiSelectedIds = MapState.multiSelectedIds.filter(id => id !== room.id);
+        } else {
+          MapState.multiSelectedIds.push(room.id);
+        }
+        MapState.selectedRoomId = room.id;
+      } else {
+        MapState.selectedRoomId = room.id;
+        MapState.multiSelectedIds = [room.id];
+      }
+
+      renderRooms();
+      renderBottomActionBar();
+
+      if (window.NQDAdmin && typeof window.NQDAdmin.onRoomPointerDown === 'function') {
+        window.NQDAdmin.onRoomPointerDown(e, room);
+      }
+    });
+  }
+
+  function formatFloorName(fl) {
+    const map = {
+      TRET: 'Tầng Trệt',
+      LAU1: 'Lầu 1',
+      LAU2: 'Lầu 2',
+      HANHCHINH: 'Khu Hành chính',
+      ALL: 'Liên tầng'
+    };
+    return map[fl] || fl;
+  }
+
+  function renderBottomActionBar() {
+    const bar = document.getElementById('bottom-room-action-bar');
+    if (!bar) return;
+    const sheet = getActiveSheet();
+    const room = sheet.rooms.find(r => r.id === MapState.selectedRoomId);
+    if (!room) {
+      bar.classList.add('hidden');
+      bar.classList.remove('flex');
+      return;
+    }
+    bar.classList.remove('hidden');
+    bar.classList.add('flex');
+    document.getElementById('action-bar-dot').style.backgroundColor = room.color || '#38bdf8';
+    document.getElementById('action-bar-name').textContent = room.name;
+    document.getElementById('action-bar-floor').textContent = formatFloorName(room.floor);
+  }
+
+  function openRoomPopup(roomId) {
+    const sheet = getActiveSheet();
+    const room = sheet.rooms.find(r => r.id === (roomId || MapState.selectedRoomId));
+    if (!room) return;
+
+    const modal = document.getElementById('room-info-popup');
+    document.getElementById('popup-title').textContent = room.name;
+
+    const repairBox = document.getElementById('popup-repair-state');
+    const contentBox = document.getElementById('popup-normal-state');
+
+    if (room.repairMode) {
+      repairBox.classList.remove('hidden');
+      repairBox.classList.add('flex');
+      contentBox.classList.add('hidden');
+    } else {
+      repairBox.classList.add('hidden');
+      repairBox.classList.remove('flex');
+      contentBox.classList.remove('hidden');
+
+      const tagsWrap = document.getElementById('popup-tags');
+      tagsWrap.innerHTML = '';
+      (room.tags || []).forEach(tid => {
+        const tagObj = MapState.eventTags.find(t => t.id === tid);
+        if (tagObj) {
+          const badge = document.createElement('span');
+          badge.className = 'px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold';
+          badge.textContent = `${tagObj.icon} ${tagObj.label}`;
+          tagsWrap.appendChild(badge);
+        }
+      });
+
+      const imgBox = document.getElementById('popup-img-container');
+      const imgEl = document.getElementById('popup-img');
+      if (room.img && room.img.trim() !== '') {
+        imgEl.src = room.img.trim();
+        imgBox.classList.remove('hidden');
+      } else {
+        imgBox.classList.add('hidden');
+      }
+
+      document.getElementById('popup-description').textContent =
+        room.desc || 'Khu vực thuộc trường THPT Chuyên Nguyễn Quang Diêu.';
+
+      const intBtn = document.getElementById('btn-popup-view-interior');
+      if (Array.isArray(room.subBooths) && room.subBooths.length > 0 && !room.interiorPublic) {
+        intBtn.classList.remove('hidden');
+      } else {
+        intBtn.classList.add('hidden');
+      }
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeRoomPopup() {
+    const modal = document.getElementById('room-info-popup');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function isPopupLocked() {
+    const modal = document.getElementById('room-info-popup');
+    return modal && !modal.classList.contains('hidden');
+  }
+
+  function applyViewportTransform() {
+    const world = document.getElementById('map-world');
+    if (world) {
+      world.style.transform = `translate3d(${MapState.panX}px, ${MapState.panY}px, 0) scale(${MapState.zoom})`;
+    }
+    const lbl = document.getElementById('zoom-level-readout');
+    if (lbl) lbl.textContent = Math.round(MapState.zoom * 100) + '%';
+  }
+
+  function centerOnFlagpole() {
+    const vp = document.getElementById('map-viewport');
+    if (!vp) return;
+    const vw = vp.clientWidth || window.innerWidth;
+    const vh = vp.clientHeight || (window.innerHeight - 120);
+    const fitScale = Math.max(0.24, Math.min(0.82, Math.min(vw / 1620, vh / 1550)));
+    MapState.zoom = fitScale;
+    MapState.panX = Math.round(vw / 2 - 860 * fitScale);
+    MapState.panY = Math.round(vh / 2 - 910 * fitScale);
+    applyViewportTransform();
+  }
+
+  function focusOnRoom(roomId) {
+    const sheet = getActiveSheet();
+    const room = sheet.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    MapState.selectedRoomId = room.id;
+    MapState.multiSelectedIds = [room.id];
+
+    const vp = document.getElementById('map-viewport');
+    const vw = vp.clientWidth || window.innerWidth;
+    const vh = vp.clientHeight || (window.innerHeight - 120);
+    const targetZoom = Math.max(MapState.zoom, 0.72);
+    MapState.zoom = targetZoom;
+    const cx = room.x + room.w / 2;
+    const cy = room.y + room.h / 2;
+    MapState.panX = Math.round(vw / 2 - cx * targetZoom);
+    MapState.panY = Math.round(vh / 2 - cy * targetZoom);
+
+    renderRooms();
+    renderBottomActionBar();
+    applyViewportTransform();
+  }
+
+  function initPanAndZoom() {
+    const vp = document.getElementById('map-viewport');
+    if (!vp) return;
+
+    const pointers = new Map();
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let startPanX = 0, startPanY = 0;
+    let initialPinchDist = null;
+    let initialPinchZoom = 1;
+    let pinchMidX = 0, pinchMidY = 0;
+
+    vp.addEventListener('pointerdown', (e) => {
+      if (isPopupLocked()) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 1) {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startPanX = MapState.panX;
+        startPanY = MapState.panY;
+      } else if (pointers.size === 2) {
+        isDragging = false;
+        const pts = Array.from(pointers.values());
+        initialPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        initialPinchZoom = MapState.zoom;
+        const rect = vp.getBoundingClientRect();
+        pinchMidX = (pts[0].x + pts[1].x) / 2 - rect.left;
+        pinchMidY = (pts[0].y + pts[1].y) / 2 - rect.top;
+      }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId) || isPopupLocked()) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 2 && initialPinchDist > 10) {
+        const pts = Array.from(pointers.values());
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const newZoom = Math.max(0.22, Math.min(2.4, initialPinchZoom * (dist / initialPinchDist)));
+        MapState.panX = pinchMidX - ((pinchMidX - MapState.panX) / MapState.zoom) * newZoom;
+        MapState.panY = pinchMidY - ((pinchMidY - MapState.panY) / MapState.zoom) * newZoom;
+        MapState.zoom = newZoom;
+        applyViewportTransform();
+      } else if (isDragging && pointers.size === 1) {
+        MapState.panX = startPanX + (e.clientX - startX);
+        MapState.panY = startPanY + (e.clientY - startY);
+        applyViewportTransform();
+      }
+    });
+
+    function clearPointer(e) {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) initialPinchDist = null;
+      if (pointers.size === 0) isDragging = false;
+    }
+    window.addEventListener('pointerup', clearPointer);
+    window.addEventListener('pointercancel', clearPointer);
+
+    vp.addEventListener('wheel', (e) => {
+      if (isPopupLocked()) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      const newZoom = Math.max(0.22, Math.min(2.4, MapState.zoom * factor));
+      const rect = vp.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      MapState.panX = mx - ((mx - MapState.panX) / MapState.zoom) * newZoom;
+      MapState.panY = my - ((my - MapState.panY) / MapState.zoom) * newZoom;
+      MapState.zoom = newZoom;
+      applyViewportTransform();
+    }, { passive: false });
+  }
+
+  function initSearchAutocomplete() {
+    const input = document.getElementById('input-room-search');
+    const clearBtn = document.getElementById('btn-clear-search');
+    const dropdown = document.getElementById('search-suggestions-box');
+    if (!input || !dropdown) return;
+
+    input.addEventListener('input', () => {
+      const q = input.value;
+      MapState.searchQuery = q;
+      clearBtn.classList.toggle('hidden', !q);
+      renderRooms();
+
+      const trimmed = q.trim().toLowerCase();
+      if (!trimmed) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      const sheet = getActiveSheet();
+      const matches = sheet.rooms.filter(r =>
+        (r.name || '').toLowerCase().includes(trimmed) ||
+        (r.desc || '').toLowerCase().includes(trimmed)
+      ).slice(0, 8);
+
+      if (matches.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      dropdown.innerHTML = '';
+      matches.forEach(r => {
+        const item = document.createElement('button');
+        item.className = 'w-full px-3 py-2 text-left text-xs hover:bg-slate-800 flex items-center justify-between border-b border-slate-800/80 last:border-0';
+        item.innerHTML = `
+          <span class="font-bold text-white truncate">${r.name}</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-sky-300 shrink-0">${formatFloorName(r.floor)}</span>
+        `;
+        item.addEventListener('click', () => {
+          dropdown.classList.add('hidden');
+          focusOnRoom(r.id);
+        });
+        dropdown.appendChild(item);
+      });
+      dropdown.classList.remove('hidden');
+    });
+
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      MapState.searchQuery = '';
+      clearBtn.classList.add('hidden');
+      dropdown.classList.add('hidden');
+      renderRooms();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#search-box-wrapper')) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  }
+
+  let seasonalRaf = null;
+  let seasonalParticles = [];
+
+  function runSeasonalEffects() {
+    if (seasonalRaf) cancelAnimationFrame(seasonalRaf);
+    const canvas = document.getElementById('seasonal-effect-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const fx = MapState.seasonalEffect;
+    if (!fx || fx.type === 'none') {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    const icons = {
+      snow: '❄️',
+      sakura: '🌸',
+      autumn: '🍁',
+      halloween: '🎃',
+      custom: fx.customToken || '✨'
+    };
+    const token = icons[fx.type] || '❄️';
+    const total = parseInt(fx.count || 45, 10);
+    const spd = parseFloat(fx.speed || 1.4);
+
+    seasonalParticles = Array.from({ length: total }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      size: 12 + Math.random() * 11,
+      vy: (0.65 + Math.random() * 1.25) * spd,
+      vx: (-0.4 + Math.random() * 0.8) * spd,
+      phase: Math.random() * Math.PI * 2
+    }));
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      seasonalParticles.forEach(p => {
+        p.y += p.vy;
+        p.phase += 0.022;
+        p.x += Math.sin(p.phase) * 0.55 + p.vx;
+        if (p.y > canvas.height + 24) {
+          p.y = -20;
+          p.x = Math.random() * canvas.width;
+        }
+        if (p.x > canvas.width + 24) p.x = -20;
+        if (p.x < -24) p.x = canvas.width + 20;
+        ctx.font = `${Math.round(p.size)}px sans-serif`;
+        ctx.fillText(token, p.x, p.y);
+      });
+      seasonalRaf = requestAnimationFrame(drawFrame);
+    }
+    seasonalRaf = requestAnimationFrame(drawFrame);
+  }
+
+  function runInjectedExternalCode() {
+    const raw = (MapState.seasonalEffect && MapState.seasonalEffect.injectedCode) || '';
+    const cssEl = document.getElementById('external-effect-css');
+    const htmlEl = document.getElementById('external-effect-html');
+    if (!cssEl || !htmlEl) return;
+    cssEl.textContent = '';
+    htmlEl.innerHTML = '';
+    if (!raw.trim()) return;
+
+    const styles = raw.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
+    styles.forEach(s => {
+      cssEl.textContent += s.replace(/<\/?style[^>]*>/gi, '') + '\n';
+    });
+    htmlEl.innerHTML = raw
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  }
+
+  function openSponsorsModal() {
+    const modal = document.getElementById('sponsors-drawer-modal');
+    const body = document.getElementById('sponsors-drawer-body');
+    if (!modal || !body) return;
+    body.innerHTML = '';
+
+    const tiers = ['Nhà Tài Trợ Kim Cương', 'Nhà Tài Trợ Vàng', 'Nhà Tài Trợ Bạc', 'Đơn Vị Đồng Hành'];
+    tiers.forEach(t => {
+      const list = MapState.sponsors.filter(s => s.tier === t);
+      if (list.length === 0) return;
+      const sec = document.createElement('div');
+      sec.className = 'space-y-2';
+      sec.innerHTML = `<h4 class="text-xs font-bold uppercase tracking-wider text-amber-400 border-b border-slate-800 pb-1">${t}</h4>`;
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2.5';
+      list.forEach(sp => {
+        const card = document.createElement('a');
+        card.href = sp.link || 'https://ntp0812.github.io/nqdmap/';
+        card.target = '_blank';
+        card.rel = 'noopener noreferrer';
+        card.className = 'p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between gap-2.5 transition';
+        card.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 font-bold text-xs flex items-center justify-center shrink-0">
+              ${sp.logo || '💎'}
+            </div>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-white truncate">${sp.name}</div>
+              <div class="text-[10px] text-sky-400 truncate">${sp.link}</div>
+            </div>
+          </div>
+          <span class="text-slate-400 text-xs">↗</span>
+        `;
+        grid.appendChild(card);
+      });
+      sec.appendChild(grid);
+      body.appendChild(sec);
+    });
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function openInteriorModal() {
+    const sheet = getActiveSheet();
+    const room = sheet.rooms.find(r => r.id === MapState.selectedRoomId);
+    if (!room) return;
+    const modal = document.getElementById('interior-layout-modal');
+    const grid = document.getElementById('interior-layout-canvas');
+    document.getElementById('interior-layout-title').textContent = `🏛️ Sơ đồ nội thất: ${room.name}`;
+    grid.innerHTML = '';
+
+    (room.subBooths || []).forEach(sb => {
+      const box = document.createElement('div');
+      box.style.left = sb.rx + '%';
+      box.style.top = sb.ry + '%';
+      box.style.width = sb.rw + '%';
+      box.style.height = sb.rh + '%';
+      box.style.backgroundColor = sb.color || '#f59e0b';
+      box.className = 'absolute rounded-xl border-2 border-white/80 text-white font-bold text-xs flex items-center justify-center text-center p-1 shadow-lg';
+      box.textContent = sb.name;
+      grid.appendChild(box);
+    });
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function initMapControls() {
+    loadStorage();
+
+    document.getElementById('input-map-bg').addEventListener('input', (e) => {
+      MapState.mapBg = e.target.value;
+      renderHeader();
+      saveStorage();
+    });
+
+    const fxSel = document.getElementById('select-season-preview');
+    fxSel.value = MapState.seasonalEffect.type || 'none';
+    fxSel.addEventListener('change', (e) => {
+      MapState.seasonalEffect.type = e.target.value;
+      runSeasonalEffects();
+      saveStorage();
+    });
+
+    document.querySelectorAll('.pill-floor-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        MapState.activeFloor = btn.dataset.floor;
+        renderFilterPills();
+        renderRooms();
+      });
+    });
+
+    document.querySelectorAll('.pill-cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        MapState.activeCategory = MapState.activeCategory === btn.dataset.cat ? 'ALL' : btn.dataset.cat;
+        renderFilterPills();
+        renderRooms();
+      });
+    });
+
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      if (isPopupLocked()) return;
+      MapState.zoom = Math.min(2.4, MapState.zoom * 1.18);
+      applyViewportTransform();
+    });
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      if (isPopupLocked()) return;
+      MapState.zoom = Math.max(0.22, MapState.zoom / 1.18);
+      applyViewportTransform();
+    });
+    document.getElementById('btn-center-flagpole').addEventListener('click', () => {
+      if (isPopupLocked()) return;
+      centerOnFlagpole();
+    });
+
+    document.getElementById('btn-action-info').addEventListener('click', () => {
+      openRoomPopup(MapState.selectedRoomId);
+    });
+    document.getElementById('btn-action-point-a').addEventListener('click', () => {
+      if (!MapState.selectedRoomId) return;
+      MapState.pointA = MapState.selectedRoomId;
+      renderMap();
+    });
+    document.getElementById('btn-action-point-b').addEventListener('click', () => {
+      if (!MapState.selectedRoomId) return;
+      if (!MapState.pointA) MapState.pointA = 'cong_chinh';
+      MapState.pointB = MapState.selectedRoomId;
+      renderMap();
+    });
+
+    document.getElementById('btn-close-popup').addEventListener('click', closeRoomPopup);
+    document.getElementById('popup-img').addEventListener('click', (e) => {
+      const lb = document.getElementById('fullscreen-lightbox');
+      document.getElementById('lightbox-image').src = e.target.src;
+      lb.classList.remove('hidden');
+      lb.classList.add('flex');
+    });
+    document.getElementById('fullscreen-lightbox').addEventListener('click', () => {
+      const lb = document.getElementById('fullscreen-lightbox');
+      lb.classList.add('hidden');
+      lb.classList.remove('flex');
+    });
+
+    document.getElementById('btn-popup-set-a').addEventListener('click', () => {
+      MapState.pointA = MapState.selectedRoomId;
+      closeRoomPopup();
+      renderMap();
+    });
+    document.getElementById('btn-popup-set-b').addEventListener('click', () => {
+      if (!MapState.pointA) MapState.pointA = 'cong_chinh';
+      MapState.pointB = MapState.selectedRoomId;
+      closeRoomPopup();
+      renderMap();
+    });
+
+    document.getElementById('btn-popup-view-interior').addEventListener('click', openInteriorModal);
+    document.getElementById('btn-close-interior-modal').addEventListener('click', () => {
+      const m = document.getElementById('interior-layout-modal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    });
+
+    document.getElementById('btn-open-sponsors').addEventListener('click', openSponsorsModal);
+    document.getElementById('btn-close-sponsors').addEventListener('click', () => {
+      const m = document.getElementById('sponsors-drawer-modal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    });
+
+    initPanAndZoom();
+    initSearchAutocomplete();
+    renderMap();
+    centerOnFlagpole();
+    runSeasonalEffects();
+    runInjectedExternalCode();
+
+    window.addEventListener('resize', () => {
+      runSeasonalEffects();
+    });
+  }
+
+  window.NQDMap = {
+    state: MapState,
+    getActiveSheet,
+    render: renderMap,
+    renderRooms,
+    centerOnFlagpole,
+    focusOnRoom,
+    openRoomPopup,
+    closeRoomPopup,
+    runSeasonalEffects,
+    runInjectedExternalCode,
+    saveStorage,
+    parsePolygonPoints,
+    init: initMapControls
+  };
+})(window);
+  </script>
+
+
+  <!-- NẠP 3 MODULE TÁCH BIỆT TỪ CÙNG THƯ MỤC -->
+  <script src="routing.js"></script>
+  <script src="admin.js"></script>
+  <script src="streetview.js"></script>
+  <script>
+    window.addEventListener('load', function () {
+      if (window.NQDMap) window.NQDMap.init();
+      if (window.NQDAdmin) window.NQDAdmin.init();
+      if (window.NQDRouting) window.NQDRouting.init();
+      if (window.NQDStreetView) window.NQDStreetView.init();
+    });
+  </script>
+</body>
+</html>
