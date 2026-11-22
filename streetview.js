@@ -23,7 +23,7 @@
         floor: 'TRET',
         x: 860,
         y: 1476,
-        img: 'panoramas/tuong_cu.jpg',
+        img: "user_uploaded_files/ttl=63d/user_uploaded/image_c8c3c6.jpg",
         is360: false,
         arrows: [
           { id: 'ar_tc_1', x: 39, y: 68, targetId: 'sv_sanh_thong_tin', icon: '⬆️', label: 'Vào Sảnh thông tin' },
@@ -78,6 +78,7 @@
   let pendingArrowPos = null; // { x: pct, y: pct }
 
   // Panorama Viewer Pan/Zoom State
+  const localPreviewUrls = {}; // Bộ nhớ tạm chỉ để xem trước file chọn từ máy, KHÔNG ghi đè đường dẫn lưu
   let panoZoom = 1.0;
   let panoOffsetX = 0; // pixels
   let panoOffsetY = 0;
@@ -204,7 +205,8 @@
     const stageWrap = document.getElementById('sv-pano-stage');
     const imgEl = document.getElementById('sv-pano-image');
 
-    const hasImg = !!(node.img && node.img.trim() !== '');
+    const previewSrc = localPreviewUrls[node.id] || (node.img ? node.img.trim() : '');
+    const hasImg = !!(previewSrc && previewSrc !== '');
     if (!hasImg) {
       emptyNotice.classList.remove('hidden');
       emptyNotice.classList.add('flex');
@@ -222,9 +224,9 @@
         renderViewerArrows(node);
       };
       imgEl.onerror = () => {
-        notify('Không tải được ảnh: ' + node.img);
+        notify('Không tải được ảnh: ' + (node.img || previewSrc));
       };
-      imgEl.src = node.img;
+      imgEl.src = previewSrc;
       // Nếu ảnh đã cache sẵn
       if (imgEl.complete && imgEl.naturalWidth > 0) {
         panoImgNaturalW = imgEl.naturalWidth;
@@ -634,29 +636,67 @@
       refreshAdminStreetViewTab();
     });
 
-    document.getElementById('adm-sv-img-path')?.addEventListener('change', (e) => {
+    function applyImgPathInput(val, shouldRefreshList) {
       const node = ensureNodesInitialized().find(n => n.id === activeNodeId);
       if (!node) return;
-      const val = e.target.value.trim();
-      if (val !== '[Ảnh test cục bộ]') {
-        node.img = val;
+      const clean = (val || '').trim();
+      if (clean !== '[Ảnh test cục bộ]') {
+        node.img = clean;
+        delete localPreviewUrls[node.id];
         getMap().saveStorage();
         renderMapPins();
-        refreshAdminStreetViewTab();
+        if (shouldRefreshList) {
+          refreshAdminStreetViewTab();
+        } else {
+          const nodes = ensureNodesInitialized();
+          const idx = nodes.findIndex(n => n.id === node.id);
+          const listBtns = document.querySelectorAll('#adm-sv-nodes-list button');
+          if (idx >= 0 && listBtns[idx]) {
+            const sp = listBtns[idx].querySelector('span');
+            if (sp) sp.textContent = `${node.img ? '📷' : '○'} ${node.name}`;
+          }
+          const countEl = document.getElementById('adm-sv-stats');
+          if (countEl) {
+            const withPhoto = nodes.filter(n => n.img && n.img.trim() !== '').length;
+            countEl.textContent = `${withPhoto}/${nodes.length} điểm đã có ảnh`;
+          }
+        }
       }
+    }
+
+    document.getElementById('adm-sv-img-path')?.addEventListener('input', (e) => {
+      applyImgPathInput(e.target.value, false);
+    });
+    document.getElementById('adm-sv-img-path')?.addEventListener('change', (e) => {
+      applyImgPathInput(e.target.value, true);
     });
 
-    // Nút test nhanh ảnh panorama từ máy tính trước khi đẩy lên GitHub
+    // Nút chọn ảnh từ máy: TỰ ĐỘNG lưu đường dẫn chuẩn panoramas/<tên_file> để đồng bộ Cloud + xem trước ngay
     document.getElementById('adm-sv-local-file')?.addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];
       const node = ensureNodesInitialized().find(n => n.id === activeNodeId);
       if (!f || !node) return;
       const url = URL.createObjectURL(f);
-      node.img = url;
+      localPreviewUrls[node.id] = url;
+      node.img = 'panoramas/' + f.name;
+      const pathEl = document.getElementById('adm-sv-img-path');
+      if (pathEl) pathEl.value = node.img;
+      getMap().saveStorage();
       renderMapPins();
       refreshAdminStreetViewTab();
       openViewer(node.id);
-      notify(`Đã nạp ảnh xem thử "${f.name}". Nhớ chép file này vào thư mục panoramas/ trên GitHub nhé!`);
+      e.target.value = '';
+      notify(`✅ Đã gắn "${node.img}" & lưu máy! Nhớ bấm ☁️ Lưu để đẩy lên Cloud.`);
+    });
+
+    document.getElementById('btn-adm-sv-save-cloud')?.addEventListener('click', () => {
+      flushActiveEdits();
+      if (window.NQDAdmin && typeof window.NQDAdmin.pushToFirebaseCloud === 'function') {
+        window.NQDAdmin.pushToFirebaseCloud();
+      } else {
+        getMap().saveStorage();
+        notify('✅ Đã lưu Street View trên máy!');
+      }
     });
 
     document.getElementById('btn-adm-sv-open-editor')?.addEventListener('click', () => {
@@ -760,12 +800,31 @@
     renderMapPins();
   }
 
+  function flushActiveEdits() {
+    const nodes = ensureNodesInitialized();
+    const node = nodes.find(n => n.id === activeNodeId);
+    if (!node) return;
+    const nameEl = document.getElementById('adm-sv-name');
+    const floorEl = document.getElementById('adm-sv-floor');
+    const imgEl = document.getElementById('adm-sv-img-path');
+    if (nameEl && nameEl.value.trim()) node.name = nameEl.value.trim();
+    if (floorEl && floorEl.value) node.floor = floorEl.value;
+    if (imgEl) {
+      const v = imgEl.value.trim();
+      if (v && v !== '[Ảnh test cục bộ]' && !v.startsWith('blob:')) {
+        node.img = v;
+      }
+    }
+    getMap().saveStorage();
+  }
+
   window.NQDStreetView = {
     openViewer,
     closeViewer,
     renderMapPins,
     refreshAdminStreetViewTab,
     setAdminTabActive,
+    flushActiveEdits,
     init: initStreetView
   };
 })(window);

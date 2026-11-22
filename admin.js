@@ -706,21 +706,28 @@
     return u.replace(/\/~2F.*$/, '').replace(/\.json$/, '').replace(/\/$/, '');
   }
 
+  function toSafeArray(val) {
+    if (Array.isArray(val)) return val.filter(x => x !== null && x !== undefined);
+    if (val && typeof val === 'object') return Object.values(val).filter(x => x !== null && x !== undefined);
+    return [];
+  }
+
   function sanitizeCloudState(data) {
     if (!data || typeof data !== 'object') return null;
-    if (!Array.isArray(data.sheets) || data.sheets.length === 0) return null;
-    data.sponsors = Array.isArray(data.sponsors) ? data.sponsors : [];
-    data.eventTags = Array.isArray(data.eventTags) ? data.eventTags : [];
-    data.streetViewNodes = Array.isArray(data.streetViewNodes) ? data.streetViewNodes : [];
+    data.sheets = toSafeArray(data.sheets);
+    if (data.sheets.length === 0) return null;
+    data.sponsors = toSafeArray(data.sponsors);
+    data.eventTags = toSafeArray(data.eventTags);
+    data.streetViewNodes = toSafeArray(data.streetViewNodes);
     data.streetViewNodes.forEach(n => {
-      n.arrows = Array.isArray(n.arrows) ? n.arrows : [];
+      n.arrows = toSafeArray(n.arrows);
     });
     data.sheets.forEach(sh => {
-      sh.rooms = Array.isArray(sh.rooms) ? sh.rooms : [];
-      sh.fixedLines = Array.isArray(sh.fixedLines) ? sh.fixedLines : [];
+      sh.rooms = toSafeArray(sh.rooms);
+      sh.fixedLines = toSafeArray(sh.fixedLines);
       sh.rooms.forEach(r => {
-        r.tags = Array.isArray(r.tags) ? r.tags : [];
-        if (r.subBooths && !Array.isArray(r.subBooths)) r.subBooths = Object.values(r.subBooths);
+        r.tags = toSafeArray(r.tags);
+        if (r.subBooths) r.subBooths = toSafeArray(r.subBooths);
       });
     });
     return data;
@@ -765,13 +772,21 @@
     if (urlIn) urlIn.value = AdminConfig.firebaseUrl;
     syncAdminSettingsToState();
 
+    // Đồng bộ tức thì mọi ô đang gõ ở Street View trước khi đẩy Cloud
+    if (window.NQDStreetView && typeof window.NQDStreetView.flushActiveEdits === 'function') {
+      window.NQDStreetView.flushActiveEdits();
+    }
+
     // Chuẩn bị bản sao sạch để đẩy lên Cloud (giữ toàn bộ sheets, rooms, streetViewNodes, headerConfig, sponsors, eventTags, seasonalEffect)
+    const nowTs = Date.now();
+    st.updatedAt = nowTs;
+    getMap().saveStorage();
     const payload = JSON.parse(JSON.stringify(st));
     payload.adminRole = 'NONE';
     payload.selectedRoomId = null;
     payload.multiSelectedIds = [];
     payload.vertexEditMode = false;
-    payload.updatedAt = Date.now();
+    payload.updatedAt = nowTs;
     // Không đẩy ảnh blob:// tạm của máy tính lên Cloud
     if (Array.isArray(payload.streetViewNodes)) {
       payload.streetViewNodes.forEach(n => {
@@ -788,9 +803,11 @@
       });
       if (res.ok) {
         const totalRooms = (getMap().getActiveSheet().rooms || []).length;
-        const totalSV = (payload.streetViewNodes || []).filter(n => n.img).length;
+        const svList = payload.streetViewNodes || [];
+        const totalSV = svList.filter(n => n.img && n.img.trim() !== '').length;
+        const totalArrows = svList.reduce((acc, n) => acc + ((n.arrows || []).length), 0);
         if (statusEl) statusEl.textContent = '☁️ Đã đồng bộ Cloud';
-        notify(`✅ Đã đẩy toàn bộ lên Cloud (${totalRooms} ô, ${totalSV} ảnh Street View)!`);
+        notify(`✅ Đã đẩy Cloud (${totalRooms} ô, ${totalSV} ảnh & ${totalArrows} mũi tên Street View)!`);
       }
     } catch (e) {
       if (e.status === 401 || e.status === 403) {
@@ -816,10 +833,25 @@
         const raw = await res.json();
         const data = sanitizeCloudState(raw);
         if (data) {
-          const curRole = getState().adminRole;
-          Object.assign(getState(), data);
-          getState().adminRole = curRole;
-          getMap().saveStorage();
+          const curState = getState();
+          const localTs = Number(curState.updatedAt || 0);
+          const cloudTs = Number(data.updatedAt || 0);
+          // Khi mở trang tự động: KHÔNG ghi đè bản sửa mới hơn trên máy chưa kịp đẩy Cloud
+          if (!isManual && localTs > 0 && cloudTs > 0 && localTs > cloudTs) {
+            if (statusEl) statusEl.textContent = '⚠️ Máy có bản mới hơn Cloud';
+            return;
+          }
+          const curRole = curState.adminRole;
+          const prevSV = Array.isArray(curState.streetViewNodes) ? curState.streetViewNodes : [];
+          if ((!data.streetViewNodes || data.streetViewNodes.length === 0) && prevSV.length > 0) {
+            data.streetViewNodes = prevSV;
+          }
+          Object.assign(curState, data);
+          curState.adminRole = curRole;
+          // Lưu lại localStorage mà KHÔNG làm mới updatedAt thành lớn hơn Cloud
+          try {
+            localStorage.setItem('NQD_MAP_DATA_V9', JSON.stringify(curState));
+          } catch (e) {}
           getMap().render();
           if (curRole !== 'NONE') updateAdminWorkspaceUI();
           if (window.NQDStreetView) {
@@ -1443,4 +1475,13 @@
     pullFromFirebaseCloud,
     init: initAdminStudio
   };
+
+  window.addEventListener('load', () => {
+    if (window.__NQD_BOOTED) return;
+    window.__NQD_BOOTED = true;
+    if (window.NQDMap) window.NQDMap.init();
+    if (window.NQDAdmin) window.NQDAdmin.init();
+    if (window.NQDRouting) window.NQDRouting.init();
+    if (window.NQDStreetView) window.NQDStreetView.init();
+  });
 })(window);

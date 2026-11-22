@@ -681,9 +681,14 @@
               <input id="adm-sv-local-file" type="file" accept="image/*" class="hidden" />
             </label>
           </div>
-          <button id="btn-adm-sv-open-editor" class="w-full py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold shadow">
-            🎯 Mở Ảnh & Chấm Mũi Tên Thủ Công
-          </button>
+          <div class="flex gap-1.5">
+            <button id="btn-adm-sv-open-editor" class="flex-1 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold shadow">
+              🎯 Mở Ảnh & Chấm Mũi Tên
+            </button>
+            <button id="btn-adm-sv-save-cloud" class="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow shrink-0" title="Lưu & đẩy Street View lên Cloud">
+              ☁️ Lưu
+            </button>
+          </div>
           <div class="pt-2 border-t border-slate-800 space-y-1.5">
             <span class="block text-[11px] font-bold text-fuchsia-300">✏️ Đổi Tên Các Mũi Tên Của Điểm Này</span>
             <div id="adm-sv-arrows-list" class="space-y-1 max-h-32 overflow-y-auto"></div>
@@ -1457,6 +1462,7 @@
 
   function saveStorage() {
     try {
+      MapState.updatedAt = Date.now();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(MapState));
     } catch (e) {}
   }
@@ -2401,18 +2407,16 @@
 })(window);
   </script>
 
+  <!-- MODULE 2: ADMIN.JS -->
+  
+  <!-- MODULE 3: ROUTING.JS -->
+  
 
+  <!-- MODULE 4: STREETVIEW.JS -->
+  
   <!-- NẠP 3 MODULE TÁCH BIỆT TỪ CÙNG THƯ MỤC -->
   <script src="routing.js"></script>
   <script src="admin.js"></script>
   <script src="streetview.js"></script>
-  <script>
-    window.addEventListener('load', function () {
-      if (window.NQDMap) window.NQDMap.init();
-      if (window.NQDAdmin) window.NQDAdmin.init();
-      if (window.NQDRouting) window.NQDRouting.init();
-      if (window.NQDStreetView) window.NQDStreetView.init();
-    });
-  </script>
 </body>
 </html>
