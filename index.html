@@ -1440,12 +1440,16 @@
 
   function loadStorage() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
-          Object.assign(MapState, parsed);
-          MapState.adminRole = 'NONE';
+      const keysToTry = [STORAGE_KEY, 'NQD_MAP_DATA_V8', 'NQD_MAP_DATA_V7', 'NQD_MAP_DATA_V6', 'NQD_MAP_DATA_V5', 'NQD_MAP_DATA_V4', 'NQD_MAP_DATA_V3', 'NQD_MAP_DATA_V2'];
+      for (let i = 0; i < keysToTry.length; i++) {
+        const saved = localStorage.getItem(keysToTry[i]);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
+            Object.assign(MapState, parsed);
+            MapState.adminRole = 'NONE';
+            break;
+          }
         }
       }
     } catch (e) {}
