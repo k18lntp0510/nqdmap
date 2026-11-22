@@ -1463,6 +1463,9 @@
   function saveStorage() {
     try {
       MapState.updatedAt = Date.now();
+      if (MapState.adminRole && MapState.adminRole !== 'NONE') {
+        MapState.hasUnsyncedAdminEdits = true;
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(MapState));
     } catch (e) {}
   }
@@ -2414,9 +2417,9 @@
 
   <!-- MODULE 4: STREETVIEW.JS -->
   
-  <!-- NẠP 3 MODULE TÁCH BIỆT TỪ CÙNG THƯ MỤC -->
-  <script src="routing.js"></script>
-  <script src="admin.js"></script>
-  <script src="streetview.js"></script>
+  <!-- NẠP 3 MODULE TÁCH BIỆT TỪ CÙNG THƯ MỤC (CÓ CACHE-BUSTER CHO ĐIỆN THOẠI) -->
+  <script src="routing.js?v=20261122"></script>
+  <script src="admin.js?v=20261122"></script>
+  <script src="streetview.js?v=20261122"></script>
 </body>
 </html>

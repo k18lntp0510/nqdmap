@@ -802,6 +802,8 @@
         body: JSON.stringify(payload)
       });
       if (res.ok) {
+        st.hasUnsyncedAdminEdits = false;
+        try { localStorage.setItem('NQD_MAP_DATA_V9', JSON.stringify(st)); } catch (e) {}
         const totalRooms = (getMap().getActiveSheet().rooms || []).length;
         const svList = payload.streetViewNodes || [];
         const totalSV = svList.filter(n => n.img && n.img.trim() !== '').length;
@@ -836,8 +838,8 @@
           const curState = getState();
           const localTs = Number(curState.updatedAt || 0);
           const cloudTs = Number(data.updatedAt || 0);
-          // Khi mở trang tự động: KHÔNG ghi đè bản sửa mới hơn trên máy chưa kịp đẩy Cloud
-          if (!isManual && localTs > 0 && cloudTs > 0 && localTs > cloudTs) {
+          // Khách xem (điện thoại) LUÔN nhận dữ liệu mới nhất từ Cloud; chỉ giữ bản máy nếu Admin vừa sửa mà chưa kịp đẩy Cloud
+          if (!isManual && curState.hasUnsyncedAdminEdits && localTs > 0 && cloudTs > 0 && localTs > cloudTs) {
             if (statusEl) statusEl.textContent = '⚠️ Máy có bản mới hơn Cloud';
             return;
           }
@@ -1448,9 +1450,14 @@
             const role = getState().adminRole;
             Object.assign(getState(), data);
             getState().adminRole = role;
+            getMap().saveStorage();
             getMap().render();
             updateAdminWorkspaceUI();
-            notify('📦 Đã khôi phục dữ liệu từ file JSON.');
+            if (window.NQDStreetView) {
+              window.NQDStreetView.renderMapPins();
+              window.NQDStreetView.refreshAdminStreetViewTab();
+            }
+            notify('📦 Đã khôi phục dữ liệu từ file JSON — Hãy bấm ☁️ Đẩy lên Cloud để đồng bộ điện thoại!');
           }
         } catch (err) {
           notify('File JSON không hợp lệ.');
